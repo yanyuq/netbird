@@ -859,24 +859,6 @@ func (e ReverseProxyDomainType) Valid() bool {
 	}
 }
 
-// Defines values for SelfHostedProxyStatus.
-const (
-	SelfHostedProxyStatusConnected    SelfHostedProxyStatus = "connected"
-	SelfHostedProxyStatusDisconnected SelfHostedProxyStatus = "disconnected"
-)
-
-// Valid indicates whether the value is a known member of the SelfHostedProxyStatus enum.
-func (e SelfHostedProxyStatus) Valid() bool {
-	switch e {
-	case SelfHostedProxyStatusConnected:
-		return true
-	case SelfHostedProxyStatusDisconnected:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SentinelOneMatchAttributesNetworkStatus.
 const (
 	SentinelOneMatchAttributesNetworkStatusConnected    SentinelOneMatchAttributesNetworkStatus = "connected"
@@ -3308,6 +3290,9 @@ type ProxyCluster struct {
 
 	// ConnectedProxies Number of proxy nodes connected in this cluster
 	ConnectedProxies int `json:"connected_proxies"`
+
+	// SelfHosted Whether this cluster is a self-hosted (BYOP) proxy managed by the account owner
+	SelfHosted bool `json:"self_hosted"`
 }
 
 // ProxyToken defines model for ProxyToken.
@@ -3510,27 +3495,6 @@ type ScimTokenResponse struct {
 	// AuthToken The newly generated SCIM API token
 	AuthToken string `json:"auth_token"`
 }
-
-// SelfHostedProxy defines model for SelfHostedProxy.
-type SelfHostedProxy struct {
-	// ClusterAddress Cluster domain or IP address
-	ClusterAddress string     `json:"cluster_address"`
-	ConnectedAt    *time.Time `json:"connected_at,omitempty"`
-
-	// Id Proxy instance ID
-	Id string `json:"id"`
-
-	// IpAddress Proxy IP address
-	IpAddress *string   `json:"ip_address,omitempty"`
-	LastSeen  time.Time `json:"last_seen"`
-
-	// ServiceCount Number of services routed through this proxy's cluster
-	ServiceCount int                   `json:"service_count"`
-	Status       SelfHostedProxyStatus `json:"status"`
-}
-
-// SelfHostedProxyStatus defines model for SelfHostedProxy.Status.
-type SelfHostedProxyStatus string
 
 // SentinelOneMatchAttributes Attribute conditions to match when approving agents
 type SentinelOneMatchAttributes struct {

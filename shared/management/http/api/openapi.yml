@@ -3200,37 +3200,6 @@ components:
               example: "nbx_abc123..."
           required:
             - plain_token
-    SelfHostedProxy:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Proxy instance ID
-        cluster_address:
-          type: string
-          description: Cluster domain or IP address
-          example: "proxy.example.com"
-        ip_address:
-          type: string
-          description: Proxy IP address
-        status:
-          type: string
-          enum: [ connected, disconnected ]
-        last_seen:
-          type: string
-          format: date-time
-        connected_at:
-          type: string
-          format: date-time
-        service_count:
-          type: integer
-          description: Number of services routed through this proxy's cluster
-      required:
-        - id
-        - cluster_address
-        - status
-        - last_seen
-        - service_count
     ProxyCluster:
       type: object
       description: A proxy cluster represents a group of proxy nodes serving the same address
@@ -3243,9 +3212,14 @@ components:
           type: integer
           description: Number of proxy nodes connected in this cluster
           example: 3
+        self_hosted:
+          type: boolean
+          description: Whether this cluster is a self-hosted (BYOP) proxy managed by the account owner
+          example: false
       required:
         - address
         - connected_proxies
+        - self_hosted
     ReverseProxyDomainType:
       type: string
       description: Type of Reverse Proxy Domain
@@ -9773,55 +9747,6 @@ paths:
           "$ref": "#/components/responses/not_found"
         '500':
           "$ref": "#/components/responses/internal_error"
-  /api/reverse-proxies/self-hosted-proxies:
-    get:
-      summary: List Self-Hosted Proxies
-      description: Returns self-hosted proxies registered for the account
-      tags: [ Self-Hosted Proxies ]
-      security:
-        - BearerAuth: [ ]
-        - TokenAuth: [ ]
-      responses:
-        '200':
-          description: A JSON Array of self-hosted proxies
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SelfHostedProxy'
-        '401':
-          "$ref": "#/components/responses/requires_authentication"
-        '403':
-          "$ref": "#/components/responses/forbidden"
-        '500':
-          "$ref": "#/components/responses/internal_error"
-  /api/reverse-proxies/self-hosted-proxies/{proxyId}:
-    delete:
-      summary: Delete a Self-Hosted Proxy
-      description: Remove a self-hosted proxy from the account
-      tags: [ Self-Hosted Proxies ]
-      security:
-        - BearerAuth: [ ]
-        - TokenAuth: [ ]
-      parameters:
-        - in: path
-          name: proxyId
-          required: true
-          schema:
-            type: string
-          description: The unique identifier of the proxy
-      responses:
-        '200':
-          description: Proxy deleted
-        '401':
-          "$ref": "#/components/responses/requires_authentication"
-        '403':
-          "$ref": "#/components/responses/forbidden"
-        '404':
-          "$ref": "#/components/responses/not_found"
-        '500':
-          "$ref": "#/components/responses/internal_error"
   /api/reverse-proxies/services:
     get:
       summary: List all Services
@@ -9894,6 +9819,35 @@ paths:
           "$ref": "#/components/responses/requires_authentication"
         '403':
           "$ref": "#/components/responses/forbidden"
+        '500':
+          "$ref": "#/components/responses/internal_error"
+  /api/reverse-proxies/clusters/{clusterId}:
+    delete:
+      summary: Delete a self-hosted proxy cluster
+      description: Removes a self-hosted (BYOP) proxy cluster and disconnects it. Only self-hosted clusters can be deleted.
+      tags: [ Services ]
+      security:
+        - BearerAuth: [ ]
+        - TokenAuth: [ ]
+      parameters:
+        - in: path
+          name: clusterId
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the proxy cluster
+      responses:
+        '200':
+          description: Proxy cluster deleted successfully
+          content: { }
+        '400':
+          "$ref": "#/components/responses/bad_request"
+        '401':
+          "$ref": "#/components/responses/requires_authentication"
+        '403':
+          "$ref": "#/components/responses/forbidden"
+        '404':
+          "$ref": "#/components/responses/not_found"
         '500':
           "$ref": "#/components/responses/internal_error"
   /api/reverse-proxies/services/{serviceId}:
