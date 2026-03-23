@@ -32,12 +32,6 @@ const (
 // SKIP_NFTABLES_ENV is the environment variable to skip nftables check
 const SKIP_NFTABLES_ENV = "NB_SKIP_NFTABLES_CHECK"
 
-// EnvForceUserspaceFirewall forces the use of the userspace packet filter even when
-// native iptables/nftables is available. This only applies when the WireGuard interface
-// runs in userspace mode. When set, peer ACLs are handled by USPFilter instead of
-// kernel netfilter rules.
-const EnvForceUserspaceFirewall = "NB_FORCE_USERSPACE_FIREWALL"
-
 // FWType is the type for the firewall type
 type FWType int
 
