@@ -530,7 +530,7 @@ func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConf
 
 	if !config.DisableIPv6 {
 		if err := wgAddr.SetIPv6FromCompact(peerConfig.GetAddressV6()); err != nil {
-			log.Warnf(err.Error())
+			log.Warn(err)
 		}
 	}
 
