@@ -71,6 +71,9 @@ func (addr *Address) SetIPv6FromCompact(raw []byte) error {
 	if err != nil {
 		return fmt.Errorf("decode v6 overlay address: %w", err)
 	}
+	if !prefix.Addr().Is6() {
+		return fmt.Errorf("expected IPv6 address, got %s", prefix.Addr())
+	}
 	addr.IPv6 = prefix.Addr()
 	addr.IPv6Net = prefix.Masked()
 	return nil

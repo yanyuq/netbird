@@ -1728,7 +1728,7 @@ func TestEngine_hasIPv6Changed(t *testing.T) {
 		{
 			name:     "no v6 before, v6 added",
 			current:  v4Only,
-			confV6:   netiputil.EncodeAddr(netip.MustParseAddr("fd00::1")),
+			confV6:   netiputil.EncodePrefix(netip.MustParsePrefix("fd00::1/64")),
 			expected: true,
 		},
 		{
@@ -1740,13 +1740,19 @@ func TestEngine_hasIPv6Changed(t *testing.T) {
 		{
 			name:     "had v6, same v6",
 			current:  v4v6,
-			confV6:   netiputil.EncodeAddr(netip.MustParseAddr("fd00::1")),
+			confV6:   netiputil.EncodePrefix(netip.MustParsePrefix("fd00::1/64")),
 			expected: false,
 		},
 		{
 			name:     "had v6, different v6",
 			current:  v4v6,
-			confV6:   netiputil.EncodeAddr(netip.MustParseAddr("fd00::2")),
+			confV6:   netiputil.EncodePrefix(netip.MustParsePrefix("fd00::2/64")),
+			expected: true,
+		},
+		{
+			name:     "same v6 addr, different prefix length",
+			current:  v4v6,
+			confV6:   netiputil.EncodePrefix(netip.MustParsePrefix("fd00::1/80")),
 			expected: true,
 		},
 		{
@@ -1760,9 +1766,7 @@ func TestEngine_hasIPv6Changed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := &Engine{
-				wgInterface: &MockWGIface{
-					AddressFunc: func() wgaddr.Address { return tt.current },
-				},
+				config: &EngineConfig{WgAddr: tt.current},
 			}
 			conf := &mgmtProto.PeerConfig{
 				AddressV6: tt.confV6,

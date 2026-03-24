@@ -1035,22 +1035,24 @@ func (e *Engine) updateConfig(conf *mgmProto.PeerConfig) error {
 }
 
 // hasIPv6Changed reports whether the IPv6 overlay address in the peer config
-// differs from the current interface address (added, removed, or changed).
+// differs from the configured address (added, removed, or changed).
+// Compares against e.config.WgAddr (not the interface address, which may have
+// been cleared by ClearIPv6 if OS assignment failed).
 func (e *Engine) hasIPv6Changed(conf *mgmProto.PeerConfig) bool {
-	current := e.wgInterface.Address()
+	current := e.config.WgAddr
 	raw := conf.GetAddressV6()
 
 	if len(raw) == 0 {
 		return current.HasIPv6()
 	}
 
-	addr, err := netiputil.DecodeAddr(raw)
+	prefix, err := netiputil.DecodePrefix(raw)
 	if err != nil {
 		log.Warnf("decode v6 overlay address: %v", err)
 		return false
 	}
 
-	return !current.HasIPv6() || current.IPv6 != addr
+	return !current.HasIPv6() || current.IPv6 != prefix.Addr() || current.IPv6Net != prefix.Masked()
 }
 
 func (e *Engine) receiveJobEvents() {
@@ -1540,20 +1542,17 @@ func (e *Engine) addNewPeer(peerConfig *mgmProto.RemotePeerConfig) error {
 		peerIPs = append(peerIPs, allowedNetIP)
 	}
 
+	if len(peerIPs) == 0 {
+		return fmt.Errorf("peer %s has no usable AllowedIPs", peerKey)
+	}
+
 	conn, err := e.createPeerConn(peerKey, peerIPs, peerConfig.AgentVersion)
 	if err != nil {
 		return fmt.Errorf("create peer connection: %w", err)
 	}
 
-	var peerIPv6 string
-	ourV6Net := e.wgInterface.Address().IPv6Net
-	for _, pip := range peerIPs {
-		if pip.Addr().Is6() && pip.Bits() == 128 && ourV6Net.Contains(pip.Addr()) {
-			peerIPv6 = pip.Addr().String()
-			break
-		}
-	}
-	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, peerIPs[0].Addr().String(), peerIPv6)
+	peerV4, peerV6 := splitAllowedIPs(peerConfig.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
+	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, peerV4, peerV6)
 	if err != nil {
 		log.Warnf("error adding peer %s to status recorder, got error: %v", peerKey, err)
 	}
