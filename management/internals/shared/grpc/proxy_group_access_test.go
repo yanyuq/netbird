@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/netbirdio/netbird/management/internals/modules/reverseproxy/proxy"
 	"github.com/netbirdio/netbird/management/internals/modules/reverseproxy/service"
 	"github.com/netbirdio/netbird/management/server/types"
 )
@@ -102,6 +103,10 @@ func (m *mockReverseProxyManager) GetServiceByDomain(_ context.Context, domain s
 		}
 	}
 	return nil, errors.New("service not found for domain: " + domain)
+}
+
+func (m *mockReverseProxyManager) GetActiveClusters(_ context.Context, _, _ string) ([]proxy.Cluster, error) {
+	return nil, nil
 }
 
 type mockUsersManager struct {

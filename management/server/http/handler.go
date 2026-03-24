@@ -176,7 +176,7 @@ func NewAPIHandler(ctx context.Context, accountManager account.Manager, networks
 	instance.AddEndpoints(instanceManager, router)
 	instance.AddVersionEndpoint(instanceManager, router)
 	if serviceManager != nil && reverseProxyDomainManager != nil {
-		reverseproxymanager.RegisterEndpoints(serviceManager, *reverseProxyDomainManager, reverseProxyAccessLogsManager, router)
+		reverseproxymanager.RegisterEndpoints(serviceManager, *reverseProxyDomainManager, reverseProxyAccessLogsManager, permissionsManager, router)
 	}
 
 	proxytoken.RegisterEndpoints(accountManager.GetStore(), permissionsManager, router)

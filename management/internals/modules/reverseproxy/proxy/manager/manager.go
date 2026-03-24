@@ -14,9 +14,10 @@ import (
 type store interface {
 	SaveProxy(ctx context.Context, p *proxy.Proxy) error
 	DisconnectProxy(ctx context.Context, proxyID string) error
-	UpdateProxyHeartbeat(ctx context.Context, proxyID string) error
+	UpdateProxyHeartbeat(ctx context.Context, proxyID, clusterAddress, ipAddress string) error
 	GetActiveProxyClusterAddresses(ctx context.Context) ([]string, error)
 	GetActiveProxyClusterAddressesForAccount(ctx context.Context, accountID string) ([]string, error)
+	GetActiveProxyClusters(ctx context.Context) ([]proxy.Cluster, error)
 	CleanupStaleProxies(ctx context.Context, inactivityDuration time.Duration) error
 	GetProxyByAccountID(ctx context.Context, accountID string) (*proxy.Proxy, error)
 	CountProxiesByAccountID(ctx context.Context, accountID string) (int64, error)
@@ -85,11 +86,13 @@ func (m *Manager) Disconnect(ctx context.Context, proxyID string) error {
 }
 
 // Heartbeat updates the proxy's last seen timestamp
-func (m *Manager) Heartbeat(ctx context.Context, proxyID string) error {
-	if err := m.store.UpdateProxyHeartbeat(ctx, proxyID); err != nil {
+func (m *Manager) Heartbeat(ctx context.Context, proxyID, clusterAddress, ipAddress string) error {
+	if err := m.store.UpdateProxyHeartbeat(ctx, proxyID, clusterAddress, ipAddress); err != nil {
 		log.WithContext(ctx).Debugf("failed to update proxy %s heartbeat: %v", proxyID, err)
 		return err
 	}
+
+	log.WithContext(ctx).Tracef("updated heartbeat for proxy %s", proxyID)
 	m.metrics.IncrementProxyHeartbeatCount()
 	return nil
 }
@@ -102,6 +105,16 @@ func (m *Manager) GetActiveClusterAddresses(ctx context.Context) ([]string, erro
 		return nil, err
 	}
 	return addresses, nil
+}
+
+// GetActiveClusters returns all active proxy clusters with their connected proxy count.
+func (m Manager) GetActiveClusters(ctx context.Context) ([]proxy.Cluster, error) {
+	clusters, err := m.store.GetActiveProxyClusters(ctx)
+	if err != nil {
+		log.WithContext(ctx).Errorf("failed to get active proxy clusters: %v", err)
+		return nil, err
+	}
+	return clusters, nil
 }
 
 // CleanupStale removes proxies that haven't sent heartbeat in the specified duration

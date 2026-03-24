@@ -13,9 +13,10 @@ import (
 type Manager interface {
 	Connect(ctx context.Context, proxyID, clusterAddress, ipAddress string, accountID *string) error
 	Disconnect(ctx context.Context, proxyID string) error
-	Heartbeat(ctx context.Context, proxyID string) error
+	Heartbeat(ctx context.Context, proxyID, clusterAddress, ipAddress string) error
 	GetActiveClusterAddresses(ctx context.Context) ([]string, error)
 	GetActiveClusterAddressesForAccount(ctx context.Context, accountID string) ([]string, error)
+	GetActiveClusters(ctx context.Context) ([]Cluster, error)
 	CleanupStale(ctx context.Context, inactivityDuration time.Duration) error
 	GetAccountProxy(ctx context.Context, accountID string) (*Proxy, error)
 	CountAccountProxies(ctx context.Context, accountID string) (int64, error)
@@ -38,4 +39,6 @@ type Controller interface {
 	RegisterProxyToCluster(ctx context.Context, clusterAddr, proxyID string) error
 	UnregisterProxyFromCluster(ctx context.Context, clusterAddr, proxyID string) error
 	GetProxiesForCluster(clusterAddr string) []string
+	ClusterSupportsCustomPorts(clusterAddr string) *bool
+	ClusterRequireSubdomain(clusterAddr string) *bool
 }
