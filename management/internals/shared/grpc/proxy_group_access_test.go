@@ -91,6 +91,9 @@ func (m *mockReverseProxyManager) StopServiceFromPeer(_ context.Context, _, _, _
 func (m *mockReverseProxyManager) StartExposeReaper(_ context.Context) {}
 
 func (m *mockReverseProxyManager) GetServiceByDomain(_ context.Context, domain string) (*service.Service, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
 	for _, services := range m.proxiesByAccount {
 		for _, svc := range services {
 			if svc.Domain == domain {

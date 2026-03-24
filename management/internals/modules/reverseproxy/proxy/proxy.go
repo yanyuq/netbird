@@ -1,6 +1,11 @@
 package proxy
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var ErrAccountProxyAlreadyExists = errors.New("account already has a registered proxy")
 
 const (
 	StatusConnected    = "connected"

@@ -183,7 +183,10 @@ func (s *ProxyServiceServer) GetMappingUpdate(req *proto.GetMappingUpdateRequest
 	if token != nil && token.AccountID != nil {
 		accountID = token.AccountID
 
-		existingProxy, _ := s.proxyManager.GetAccountProxy(ctx, *accountID)
+		existingProxy, err := s.proxyManager.GetAccountProxy(ctx, *accountID)
+		if err != nil {
+			log.WithContext(ctx).Debugf("failed to get account proxy for %s: %v", *accountID, err)
+		}
 		if existingProxy != nil && existingProxy.ID != proxyID {
 			if existingProxy.Status == proxy.StatusConnected {
 				return status.Errorf(codes.ResourceExhausted, "limit of 1 self-hosted proxy per account")
@@ -223,7 +226,7 @@ func (s *ProxyServiceServer) GetMappingUpdate(req *proto.GetMappingUpdateRequest
 	if err := s.proxyManager.Connect(ctx, proxyID, proxyAddress, peerInfo, accountID); err != nil {
 		if accountID != nil {
 			cancel()
-			if strings.Contains(err.Error(), "UNIQUE constraint") || strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "idx_proxy_account_id_unique") {
+			if errors.Is(err, proxy.ErrAccountProxyAlreadyExists) {
 				return status.Errorf(codes.ResourceExhausted, "limit of 1 self-hosted proxy per account")
 			}
 			return status.Errorf(codes.Internal, "failed to register BYOP proxy: %v", err)
@@ -453,14 +456,18 @@ func (s *ProxyServiceServer) SendAccessLog(ctx context.Context, req *proto.SendA
 // BYOP proxies only receive updates for their own account's services.
 func (s *ProxyServiceServer) SendServiceUpdate(update *proto.GetMappingUpdateResponse) {
 	log.Debugf("Broadcasting service update to all connected proxy servers")
-	var updateAccountID string
-	if len(update.Mapping) > 0 {
-		updateAccountID = update.Mapping[0].AccountId
+	updateAccountIDs := make(map[string]struct{})
+	for _, m := range update.Mapping {
+		if m.AccountId != "" {
+			updateAccountIDs[m.AccountId] = struct{}{}
+		}
 	}
 	s.connectedProxies.Range(func(key, value interface{}) bool {
 		conn := value.(*proxyConnection)
-		if conn.accountID != nil && updateAccountID != "" && *conn.accountID != updateAccountID {
-			return true
+		if conn.accountID != nil && len(updateAccountIDs) > 0 {
+			if _, ok := updateAccountIDs[*conn.accountID]; !ok {
+				return true
+			}
 		}
 		msg := s.perProxyMessage(update, conn.proxyID)
 		if msg == nil {

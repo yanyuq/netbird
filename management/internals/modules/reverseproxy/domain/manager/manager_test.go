@@ -62,20 +62,22 @@ func TestGetClusterAllowList_NoBYOP_FallbackToShared(t *testing.T) {
 	assert.Equal(t, []string{"eu.proxy.netbird.io", "us.proxy.netbird.io"}, result)
 }
 
-func TestGetClusterAllowList_BYOPError_FallbackToShared(t *testing.T) {
+func TestGetClusterAllowList_BYOPError_ReturnsError(t *testing.T) {
 	pm := &mockProxyManager{
 		getActiveClusterAddressesForAccountFunc: func(_ context.Context, _ string) ([]string, error) {
 			return nil, errors.New("db error")
 		},
 		getActiveClusterAddressesFunc: func(_ context.Context) ([]string, error) {
-			return []string{"eu.proxy.netbird.io"}, nil
+			t.Fatal("should not call GetActiveClusterAddresses when BYOP lookup fails")
+			return nil, nil
 		},
 	}
 
 	mgr := Manager{proxyManager: pm}
 	result, err := mgr.getClusterAllowList(context.Background(), "acc-123")
-	require.NoError(t, err)
-	assert.Equal(t, []string{"eu.proxy.netbird.io"}, result)
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "BYOP cluster addresses")
 }
 
 func TestGetClusterAllowList_BYOPEmptySlice_FallbackToShared(t *testing.T) {

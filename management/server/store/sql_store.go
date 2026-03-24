@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
@@ -5411,9 +5412,21 @@ func (s *SqlStore) SaveProxy(ctx context.Context, p *proxy.Proxy) error {
 	result := s.db.WithContext(ctx).Save(p)
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to save proxy: %v", result.Error)
-		return status.Errorf(status.Internal, "failed to save proxy: %v", result.Error)
+		if isUniqueConstraintError(result.Error) {
+			return proxy.ErrAccountProxyAlreadyExists
+		}
+		return status.Errorf(status.Internal, "failed to save proxy")
 	}
 	return nil
+}
+
+func isUniqueConstraintError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return true
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "UNIQUE constraint") || strings.Contains(errStr, "duplicate key")
 }
 
 // DisconnectProxy updates only the status, disconnected_at, and last_seen fields

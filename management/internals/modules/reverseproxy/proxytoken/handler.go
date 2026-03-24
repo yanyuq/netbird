@@ -15,6 +15,7 @@ import (
 	"github.com/netbirdio/netbird/management/server/types"
 	"github.com/netbirdio/netbird/shared/management/http/api"
 	"github.com/netbirdio/netbird/shared/management/http/util"
+	"github.com/netbirdio/netbird/shared/management/status"
 )
 
 type handler struct {
@@ -58,8 +59,14 @@ func (h *handler) createToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var expiresIn time.Duration
-	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
-		expiresIn = time.Duration(*req.ExpiresIn) * time.Second
+	if req.ExpiresIn != nil {
+		if *req.ExpiresIn < 0 {
+			util.WriteErrorResponse("expires_in must be non-negative", http.StatusBadRequest, w)
+			return
+		}
+		if *req.ExpiresIn > 0 {
+			expiresIn = time.Duration(*req.ExpiresIn) * time.Second
+		}
 	}
 
 	accountID := userAuth.AccountId
@@ -134,7 +141,11 @@ func (h *handler) revokeToken(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.store.GetProxyAccessTokenByID(r.Context(), store.LockingStrengthNone, tokenID)
 	if err != nil {
-		util.WriteErrorResponse("token not found", http.StatusNotFound, w)
+		if s, ok := status.FromError(err); ok && s.ErrorType == status.NotFound {
+			util.WriteErrorResponse("token not found", http.StatusNotFound, w)
+		} else {
+			util.WriteErrorResponse("failed to retrieve token", http.StatusInternalServerError, w)
+		}
 		return
 	}
 

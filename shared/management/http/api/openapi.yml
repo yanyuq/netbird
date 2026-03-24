@@ -3160,6 +3160,7 @@ components:
           example: "my-proxy-token"
         expires_in:
           type: integer
+          minimum: 0
           description: Token expiration in seconds (0 = never expires)
           example: 0
       required:
