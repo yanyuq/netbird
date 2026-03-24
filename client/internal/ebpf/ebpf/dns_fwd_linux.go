@@ -47,5 +47,9 @@ func (tf *GeneralManager) FreeDNSFwd() error {
 
 func ip2int(ipString string) uint32 {
 	ip := net.ParseIP(ipString)
-	return binary.BigEndian.Uint32(ip.To4())
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return 0
+	}
+	return binary.BigEndian.Uint32(ip4)
 }

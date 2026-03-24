@@ -47,17 +47,20 @@ func (e *endpoint) LinkAddress() tcpip.LinkAddress {
 func (e *endpoint) WritePackets(pkts stack.PacketBufferList) (int, tcpip.Error) {
 	var written int
 	for _, pkt := range pkts.AsSlice() {
-		netHeader := header.IPv4(pkt.NetworkHeader().View().AsSlice())
-
 		data := stack.PayloadSince(pkt.NetworkHeader())
 		if data == nil {
 			continue
 		}
 
-		// Send the packet through WireGuard
-		address := netHeader.DestinationAddress()
-		err := e.device.CreateOutboundPacket(data.AsSlice(), address.AsSlice())
-		if err != nil {
+		raw := pkt.NetworkHeader().View().AsSlice()
+		var address tcpip.Address
+		if len(raw) > 0 && raw[0]>>4 == 6 {
+			address = header.IPv6(raw).DestinationAddress()
+		} else {
+			address = header.IPv4(raw).DestinationAddress()
+		}
+
+		if err := e.device.CreateOutboundPacket(data.AsSlice(), address.AsSlice()); err != nil {
 			e.logger.Error1("CreateOutboundPacket: %v", err)
 			continue
 		}

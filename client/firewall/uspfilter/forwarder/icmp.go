@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/netip"
 	"os/exec"
 	"runtime"
 	"time"
@@ -150,19 +149,23 @@ func (f *Forwarder) sendICMPEvent(typ nftypes.Type, flowID uuid.UUID, id stack.T
 		txPackets = 1
 	}
 
-	srcIp := netip.AddrFrom4(id.RemoteAddress.As4())
-	dstIp := netip.AddrFrom4(id.LocalAddress.As4())
+	srcIp := addrToNetipAddr(id.RemoteAddress)
+	dstIp := addrToNetipAddr(id.LocalAddress)
+
+	proto := nftypes.ICMP
+	if srcIp.Is6() {
+		proto = nftypes.ICMPv6
+	}
 
 	fields := nftypes.EventFields{
 		FlowID:    flowID,
 		Type:      typ,
 		Direction: nftypes.Ingress,
-		Protocol:  nftypes.ICMP,
-		// TODO: handle ipv6
-		SourceIP: srcIp,
-		DestIP:   dstIp,
-		ICMPType: icmpType,
-		ICMPCode: icmpCode,
+		Protocol:  proto,
+		SourceIP:  srcIp,
+		DestIP:    dstIp,
+		ICMPType:  icmpType,
+		ICMPCode:  icmpCode,
 
 		RxBytes:   rxBytes,
 		TxBytes:   txBytes,
@@ -209,26 +212,141 @@ func (f *Forwarder) handleICMPViaPing(flowID uuid.UUID, id stack.TransportEndpoi
 	f.sendICMPEvent(nftypes.TypeEnd, flowID, id, icmpType, icmpCode, uint64(rxBytes), uint64(txBytes))
 }
 
+// handleICMPv6 handles ICMPv6 packets from the network stack.
+func (f *Forwarder) handleICMPv6(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
+	icmpHdr := header.ICMPv6(pkt.TransportHeader().View().AsSlice())
+
+	flowID := uuid.New()
+	f.sendICMPEvent(nftypes.TypeStart, flowID, id, uint8(icmpHdr.Type()), uint8(icmpHdr.Code()), 0, 0)
+
+	if icmpHdr.Type() == header.ICMPv6EchoRequest {
+		return f.handleICMPv6Echo(flowID, id, pkt, uint8(icmpHdr.Type()), uint8(icmpHdr.Code()))
+	}
+
+	f.logger.Debug2("forwarder: Unhandled ICMPv6 type %v for %v", icmpHdr.Type(), epID(id))
+	return false
+}
+
+// handleICMPv6Echo handles ICMPv6 echo requests using the ping binary.
+func (f *Forwarder) handleICMPv6Echo(flowID uuid.UUID, id stack.TransportEndpointID, pkt *stack.PacketBuffer, icmpType, icmpCode uint8) bool {
+	select {
+	case f.pingSemaphore <- struct{}{}:
+		icmpData := stack.PayloadSince(pkt.TransportHeader()).ToSlice()
+		rxBytes := pkt.Size()
+
+		go func() {
+			defer func() { <-f.pingSemaphore }()
+			f.handleICMPv6ViaPing(flowID, id, icmpType, icmpCode, icmpData, rxBytes)
+		}()
+	default:
+		f.logger.Debug3("forwarder: ICMPv6 rate limit exceeded for %v type %v code %v", epID(id), icmpType, icmpCode)
+	}
+	return true
+}
+
+// handleICMPv6ViaPing uses the system ping6 binary for ICMPv6 echo.
+func (f *Forwarder) handleICMPv6ViaPing(flowID uuid.UUID, id stack.TransportEndpointID, icmpType, icmpCode uint8, icmpData []byte, rxBytes int) {
+	ctx, cancel := context.WithTimeout(f.ctx, 5*time.Second)
+	defer cancel()
+
+	dstIP := f.determineDialAddr(id.LocalAddress)
+	cmd := buildPingCommand(ctx, dstIP, 5*time.Second)
+
+	pingStart := time.Now()
+	if err := cmd.Run(); err != nil {
+		f.logger.Warn4("forwarder: Ping6 failed for %v type %v code %v: %v", epID(id), icmpType, icmpCode, err)
+		return
+	}
+	rtt := time.Since(pingStart).Round(10 * time.Microsecond)
+
+	f.logger.Trace4("forwarder: Forwarded ICMPv6 echo reply %v type %v code %v (rtt=%v)", epID(id), icmpType, icmpCode, rtt)
+
+	txBytes := f.synthesizeICMPv6EchoReply(id, icmpData)
+	f.sendICMPEvent(nftypes.TypeEnd, flowID, id, icmpType, icmpCode, uint64(rxBytes), uint64(txBytes))
+}
+
+// synthesizeICMPv6EchoReply creates an ICMPv6 echo reply and injects it back.
+func (f *Forwarder) synthesizeICMPv6EchoReply(id stack.TransportEndpointID, icmpData []byte) int {
+	replyICMP := make([]byte, len(icmpData))
+	copy(replyICMP, icmpData)
+
+	replyHdr := header.ICMPv6(replyICMP)
+	replyHdr.SetType(header.ICMPv6EchoReply)
+	replyHdr.SetChecksum(0)
+	// ICMPv6 checksum requires a pseudo-header
+	psum := header.PseudoHeaderChecksum(header.ICMPv6ProtocolNumber, id.LocalAddress, id.RemoteAddress, uint16(len(replyICMP)))
+	replyHdr.SetChecksum(header.ICMPv6Checksum(header.ICMPv6ChecksumParams{
+		Header:      replyHdr,
+		Src:         id.LocalAddress,
+		Dst:         id.RemoteAddress,
+		PayloadCsum: psum,
+		PayloadLen:  len(replyICMP) - header.ICMPv6MinimumSize,
+	}))
+
+	return f.injectICMPv6Reply(id, replyICMP)
+}
+
+// injectICMPv6Reply wraps an ICMPv6 payload in an IPv6 header and sends to the peer.
+func (f *Forwarder) injectICMPv6Reply(id stack.TransportEndpointID, icmpPayload []byte) int {
+	ipHdr := make([]byte, header.IPv6MinimumSize)
+	ip := header.IPv6(ipHdr)
+	ip.Encode(&header.IPv6Fields{
+		PayloadLength:     uint16(len(icmpPayload)),
+		TransportProtocol: header.ICMPv6ProtocolNumber,
+		HopLimit:          64,
+		SrcAddr:           id.LocalAddress,
+		DstAddr:           id.RemoteAddress,
+	})
+
+	fullPacket := make([]byte, 0, len(ipHdr)+len(icmpPayload))
+	fullPacket = append(fullPacket, ipHdr...)
+	fullPacket = append(fullPacket, icmpPayload...)
+
+	if err := f.endpoint.device.CreateOutboundPacket(fullPacket, id.RemoteAddress.AsSlice()); err != nil {
+		f.logger.Error1("forwarder: Failed to send ICMPv6 reply to peer: %v", err)
+		return 0
+	}
+
+	return len(fullPacket)
+}
+
+const (
+	pingBin  = "ping"
+	ping6Bin = "ping6"
+)
+
 // buildPingCommand creates a platform-specific ping command.
+// Most platforms auto-detect IPv6 from raw addresses. macOS/iOS/OpenBSD require ping6.
 func buildPingCommand(ctx context.Context, target net.IP, timeout time.Duration) *exec.Cmd {
 	timeoutSec := int(timeout.Seconds())
 	if timeoutSec < 1 {
 		timeoutSec = 1
 	}
 
+	isV6 := target.To4() == nil
+	timeoutStr := fmt.Sprintf("%d", timeoutSec)
+
 	switch runtime.GOOS {
 	case "linux", "android":
-		return exec.CommandContext(ctx, "ping", "-c", "1", "-W", fmt.Sprintf("%d", timeoutSec), "-q", target.String())
+		return exec.CommandContext(ctx, pingBin, "-c", "1", "-W", timeoutStr, "-q", target.String())
 	case "darwin", "ios":
-		return exec.CommandContext(ctx, "ping", "-c", "1", "-t", fmt.Sprintf("%d", timeoutSec), "-q", target.String())
+		bin := pingBin
+		if isV6 {
+			bin = ping6Bin
+		}
+		return exec.CommandContext(ctx, bin, "-c", "1", "-t", timeoutStr, "-q", target.String())
 	case "freebsd":
-		return exec.CommandContext(ctx, "ping", "-c", "1", "-t", fmt.Sprintf("%d", timeoutSec), target.String())
+		return exec.CommandContext(ctx, pingBin, "-c", "1", "-t", timeoutStr, target.String())
 	case "openbsd", "netbsd":
-		return exec.CommandContext(ctx, "ping", "-c", "1", "-w", fmt.Sprintf("%d", timeoutSec), target.String())
+		bin := pingBin
+		if isV6 {
+			bin = ping6Bin
+		}
+		return exec.CommandContext(ctx, bin, "-c", "1", "-w", timeoutStr, target.String())
 	case "windows":
-		return exec.CommandContext(ctx, "ping", "-n", "1", "-w", fmt.Sprintf("%d", timeoutSec*1000), target.String())
+		return exec.CommandContext(ctx, pingBin, "-n", "1", "-w", fmt.Sprintf("%d", timeoutSec*1000), target.String())
 	default:
-		return exec.CommandContext(ctx, "ping", "-c", "1", target.String())
+		return exec.CommandContext(ctx, pingBin, "-c", "1", target.String())
 	}
 }
 

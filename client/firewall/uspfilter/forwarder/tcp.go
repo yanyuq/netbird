@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"sync"
 
 	"github.com/google/uuid"
@@ -133,15 +132,14 @@ func (f *Forwarder) proxyTCP(id stack.TransportEndpointID, inConn *gonet.TCPConn
 }
 
 func (f *Forwarder) sendTCPEvent(typ nftypes.Type, flowID uuid.UUID, id stack.TransportEndpointID, rxBytes, txBytes, rxPackets, txPackets uint64) {
-	srcIp := netip.AddrFrom4(id.RemoteAddress.As4())
-	dstIp := netip.AddrFrom4(id.LocalAddress.As4())
+	srcIp := addrToNetipAddr(id.RemoteAddress)
+	dstIp := addrToNetipAddr(id.LocalAddress)
 
 	fields := nftypes.EventFields{
-		FlowID:    flowID,
-		Type:      typ,
-		Direction: nftypes.Ingress,
-		Protocol:  nftypes.TCP,
-		// TODO: handle ipv6
+		FlowID:     flowID,
+		Type:       typ,
+		Direction:  nftypes.Ingress,
+		Protocol:   nftypes.TCP,
 		SourceIP:   srcIp,
 		DestIP:     dstIp,
 		SourcePort: id.RemotePort,

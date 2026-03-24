@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -276,15 +275,14 @@ func (f *Forwarder) proxyUDP(ctx context.Context, pConn *udpPacketConn, id stack
 
 // sendUDPEvent stores flow events for UDP connections
 func (f *Forwarder) sendUDPEvent(typ nftypes.Type, flowID uuid.UUID, id stack.TransportEndpointID, rxBytes, txBytes, rxPackets, txPackets uint64) {
-	srcIp := netip.AddrFrom4(id.RemoteAddress.As4())
-	dstIp := netip.AddrFrom4(id.LocalAddress.As4())
+	srcIp := addrToNetipAddr(id.RemoteAddress)
+	dstIp := addrToNetipAddr(id.LocalAddress)
 
 	fields := nftypes.EventFields{
-		FlowID:    flowID,
-		Type:      typ,
-		Direction: nftypes.Ingress,
-		Protocol:  nftypes.UDP,
-		// TODO: handle ipv6
+		FlowID:     flowID,
+		Type:       typ,
+		Direction:  nftypes.Ingress,
+		Protocol:   nftypes.UDP,
 		SourceIP:   srcIp,
 		DestIP:     dstIp,
 		SourcePort: id.RemotePort,

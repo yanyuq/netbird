@@ -14,6 +14,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
@@ -43,6 +44,7 @@ type Forwarder struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
 	ip               tcpip.Address
+	ipv6             tcpip.Address
 	netstack         bool
 	hasRawICMPAccess bool
 	pingSemaphore    chan struct{}
@@ -50,11 +52,15 @@ type Forwarder struct {
 
 func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.FlowLogger, netstack bool, mtu uint16) (*Forwarder, error) {
 	s := stack.New(stack.Options{
-		NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol},
+		NetworkProtocols: []stack.NetworkProtocolFactory{
+			ipv4.NewProtocol,
+			ipv6.NewProtocol,
+		},
 		TransportProtocols: []stack.TransportProtocolFactory{
 			tcp.NewProtocol,
 			udp.NewProtocol,
 			icmp.NewProtocol4,
+			icmp.NewProtocol6,
 		},
 		HandleLocal: false,
 	})
@@ -73,13 +79,26 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 	protoAddr := tcpip.ProtocolAddress{
 		Protocol: ipv4.ProtocolNumber,
 		AddressWithPrefix: tcpip.AddressWithPrefix{
-			Address:   tcpip.AddrFromSlice(iface.Address().IP.AsSlice()),
+			Address:   tcpip.AddrFrom4(iface.Address().IP.As4()),
 			PrefixLen: iface.Address().Network.Bits(),
 		},
 	}
 
 	if err := s.AddProtocolAddress(nicID, protoAddr, stack.AddressProperties{}); err != nil {
 		return nil, fmt.Errorf("failed to add protocol address: %s", err)
+	}
+
+	if v6 := iface.Address().IPv6; v6.IsValid() {
+		v6Addr := tcpip.ProtocolAddress{
+			Protocol: ipv6.ProtocolNumber,
+			AddressWithPrefix: tcpip.AddressWithPrefix{
+				Address:   tcpip.AddrFrom16(v6.As16()),
+				PrefixLen: iface.Address().IPv6Net.Bits(),
+			},
+		}
+		if err := s.AddProtocolAddress(nicID, v6Addr, stack.AddressProperties{}); err != nil {
+			return nil, fmt.Errorf("add IPv6 protocol address: %s", err)
+		}
 	}
 
 	defaultSubnet, err := tcpip.NewSubnet(
@@ -90,6 +109,14 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 		return nil, fmt.Errorf("creating default subnet: %w", err)
 	}
 
+	defaultSubnetV6, err := tcpip.NewSubnet(
+		tcpip.AddrFrom16([16]byte{}),
+		tcpip.MaskFromBytes(make([]byte, 16)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating default v6 subnet: %w", err)
+	}
+
 	if err := s.SetPromiscuousMode(nicID, true); err != nil {
 		return nil, fmt.Errorf("set promiscuous mode: %s", err)
 	}
@@ -98,10 +125,8 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 	}
 
 	s.SetRouteTable([]tcpip.Route{
-		{
-			Destination: defaultSubnet,
-			NIC:         nicID,
-		},
+		{Destination: defaultSubnet, NIC: nicID},
+		{Destination: defaultSubnetV6, NIC: nicID},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -114,7 +139,8 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 		ctx:           ctx,
 		cancel:        cancel,
 		netstack:      netstack,
-		ip:            tcpip.AddrFromSlice(iface.Address().IP.AsSlice()),
+		ip:            tcpip.AddrFrom4(iface.Address().IP.As4()),
+		ipv6:          addrFromNetipAddr(iface.Address().IPv6),
 		pingSemaphore: make(chan struct{}, 3),
 	}
 
@@ -132,6 +158,7 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 	s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
 	s.SetTransportProtocolHandler(icmp.ProtocolNumber4, f.handleICMP)
+	s.SetTransportProtocolHandler(icmp.ProtocolNumber6, f.handleICMPv6)
 
 	f.checkICMPCapability()
 
@@ -140,8 +167,24 @@ func New(iface common.IFaceMapper, logger *nblog.Logger, flowLogger nftypes.Flow
 }
 
 func (f *Forwarder) InjectIncomingPacket(payload []byte) error {
-	if len(payload) < header.IPv4MinimumSize {
-		return fmt.Errorf("packet too small: %d bytes", len(payload))
+	if len(payload) == 0 {
+		return fmt.Errorf("empty packet")
+	}
+
+	var protoNum tcpip.NetworkProtocolNumber
+	switch payload[0] >> 4 {
+	case 4:
+		if len(payload) < header.IPv4MinimumSize {
+			return fmt.Errorf("IPv4 packet too small: %d bytes", len(payload))
+		}
+		protoNum = ipv4.ProtocolNumber
+	case 6:
+		if len(payload) < header.IPv6MinimumSize {
+			return fmt.Errorf("IPv6 packet too small: %d bytes", len(payload))
+		}
+		protoNum = ipv6.ProtocolNumber
+	default:
+		return fmt.Errorf("unknown IP version: %d", payload[0]>>4)
 	}
 
 	pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
@@ -150,7 +193,7 @@ func (f *Forwarder) InjectIncomingPacket(payload []byte) error {
 	defer pkt.DecRef()
 
 	if f.endpoint.dispatcher != nil {
-		f.endpoint.dispatcher.DeliverNetworkPacket(ipv4.ProtocolNumber, pkt)
+		f.endpoint.dispatcher.DeliverNetworkPacket(protoNum, pkt)
 	}
 	return nil
 }
@@ -170,6 +213,9 @@ func (f *Forwarder) Stop() {
 func (f *Forwarder) determineDialAddr(addr tcpip.Address) net.IP {
 	if f.netstack && f.ip.Equal(addr) {
 		return net.IPv4(127, 0, 0, 1)
+	}
+	if f.netstack && f.ipv6.Equal(addr) {
+		return net.IPv6loopback
 	}
 	return addr.AsSlice()
 }
@@ -203,6 +249,25 @@ func buildKey(srcIP, dstIP netip.Addr, srcPort, dstPort uint16) conntrack.ConnKe
 		SrcPort: srcPort,
 		DstPort: dstPort,
 	}
+}
+
+// addrFromNetipAddr converts a netip.Addr to a gvisor tcpip.Address without allocating.
+func addrFromNetipAddr(addr netip.Addr) tcpip.Address {
+	if !addr.IsValid() {
+		return tcpip.Address{}
+	}
+	if addr.Is4() {
+		return tcpip.AddrFrom4(addr.As4())
+	}
+	return tcpip.AddrFrom16(addr.As16())
+}
+
+// addrToNetipAddr converts a gvisor tcpip.Address to netip.Addr without allocating.
+func addrToNetipAddr(addr tcpip.Address) netip.Addr {
+	if addr.Len() == 4 {
+		return netip.AddrFrom4(addr.As4())
+	}
+	return netip.AddrFrom16(addr.As16())
 }
 
 // checkICMPCapability tests whether we have raw ICMP socket access at startup.

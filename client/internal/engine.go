@@ -1478,10 +1478,10 @@ func (e *Engine) updateOfflinePeers(offlinePeers []*mgmProto.RemotePeerConfig) {
 	replacement := make([]peer.State, len(offlinePeers))
 	for i, offlinePeer := range offlinePeers {
 		log.Debugf("added offline peer %s", offlinePeer.Fqdn)
-		v4, v6 := splitAllowedIPs(offlinePeer.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
+		v4, v6 := overlayAddrsFromAllowedIPs(offlinePeer.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
 		replacement[i] = peer.State{
-			IP:               v4,
-			IPv6:             v6,
+			IP:               v4.String(),
+			IPv6:             v6.String(),
 			PubKey:           offlinePeer.GetWgPubKey(),
 			FQDN:             offlinePeer.GetFqdn(),
 			ConnStatus:       peer.StatusIdle,
@@ -1492,24 +1492,24 @@ func (e *Engine) updateOfflinePeers(offlinePeers []*mgmProto.RemotePeerConfig) {
 	e.statusRecorder.ReplaceOfflinePeers(replacement)
 }
 
-// splitAllowedIPs separates the peer's overlay v4 (/32) and v6 (/128) addresses
-// from a list of AllowedIPs CIDRs. The v6 address is only matched if it falls
-// within ourV6Net (the local overlay v6 subnet), to avoid confusing routed /128
-// prefixes with the peer's overlay address.
-func splitAllowedIPs(allowedIPs []string, ourV6Net netip.Prefix) (v4, v6 string) {
+// overlayAddrsFromAllowedIPs extracts the peer's v4 and v6 overlay addresses
+// from AllowedIPs strings. Only host routes (/32, /128) are considered; v6 must
+// fall within ourV6Net to distinguish overlay addresses from routed prefixes.
+func overlayAddrsFromAllowedIPs(allowedIPs []string, ourV6Net netip.Prefix) (v4, v6 netip.Addr) {
 	for _, cidr := range allowedIPs {
 		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
 			log.Warnf("failed to parse AllowedIP %q: %v", cidr, err)
 			continue
 		}
+		addr := prefix.Addr().Unmap()
 		switch {
-		case prefix.Addr().Is4() && prefix.Bits() == 32 && v4 == "":
-			v4 = prefix.Addr().String()
-		case prefix.Addr().Is6() && prefix.Bits() == 128 && ourV6Net.Contains(prefix.Addr()) && v6 == "":
-			v6 = prefix.Addr().String()
+		case addr.Is4() && prefix.Bits() == 32 && !v4.IsValid():
+			v4 = addr
+		case addr.Is6() && prefix.Bits() == 128 && ourV6Net.Contains(addr) && !v6.IsValid():
+			v6 = addr
 		}
-		if v4 != "" && v6 != "" {
+		if v4.IsValid() && v6.IsValid() {
 			break
 		}
 	}
@@ -1556,8 +1556,8 @@ func (e *Engine) addNewPeer(peerConfig *mgmProto.RemotePeerConfig) error {
 		return fmt.Errorf("create peer connection: %w", err)
 	}
 
-	peerV4, peerV6 := splitAllowedIPs(peerConfig.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
-	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, peerV4, peerV6)
+	peerV4, peerV6 := overlayAddrsFromAllowedIPs(peerConfig.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
+	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, peerV4.String(), peerV6.String())
 	if err != nil {
 		log.Warnf("error adding peer %s to status recorder, got error: %v", peerKey, err)
 	}

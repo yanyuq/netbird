@@ -582,11 +582,16 @@ func TestProcessOutgoingHooks(t *testing.T) {
 			d := &decoder{
 				decoded: []gopacket.LayerType{},
 			}
-			d.parser = gopacket.NewDecodingLayerParser(
+			d.parser4 = gopacket.NewDecodingLayerParser(
 				layers.LayerTypeIPv4,
 				&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
 			)
-			d.parser.IgnoreUnsupported = true
+			d.parser4.IgnoreUnsupported = true
+			d.parser6 = gopacket.NewDecodingLayerParser(
+				layers.LayerTypeIPv6,
+				&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
+			)
+			d.parser6.IgnoreUnsupported = true
 			return d
 		},
 	}
@@ -687,11 +692,16 @@ func TestStatefulFirewall_UDPTracking(t *testing.T) {
 			d := &decoder{
 				decoded: []gopacket.LayerType{},
 			}
-			d.parser = gopacket.NewDecodingLayerParser(
+			d.parser4 = gopacket.NewDecodingLayerParser(
 				layers.LayerTypeIPv4,
 				&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
 			)
-			d.parser.IgnoreUnsupported = true
+			d.parser4.IgnoreUnsupported = true
+			d.parser6 = gopacket.NewDecodingLayerParser(
+				layers.LayerTypeIPv6,
+				&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
+			)
+			d.parser6.IgnoreUnsupported = true
 			return d
 		},
 	}
@@ -1097,8 +1107,8 @@ func TestMSSClamping(t *testing.T) {
 	}()
 
 	require.True(t, manager.mssClampEnabled, "MSS clamping should be enabled by default")
-	expectedMSSValue := uint16(1280 - ipTCPHeaderMinSize)
-	require.Equal(t, expectedMSSValue, manager.mssClampValue, "MSS clamp value should be MTU - 40")
+	require.Equal(t, uint16(1280-ipv4TCPHeaderMinSize), manager.mssClampValueIPv4, "IPv4 MSS clamp value should be MTU - 40")
+	require.Equal(t, uint16(1280-ipv6TCPHeaderMinSize), manager.mssClampValueIPv6, "IPv6 MSS clamp value should be MTU - 60")
 
 	err = manager.UpdateLocalIPs()
 	require.NoError(t, err)
@@ -1116,7 +1126,7 @@ func TestMSSClamping(t *testing.T) {
 		require.Len(t, d.tcp.Options, 1, "Should have MSS option")
 		require.Equal(t, uint8(layers.TCPOptionKindMSS), uint8(d.tcp.Options[0].OptionType))
 		actualMSS := binary.BigEndian.Uint16(d.tcp.Options[0].OptionData)
-		require.Equal(t, expectedMSSValue, actualMSS, "MSS should be clamped to MTU - 40")
+		require.Equal(t, manager.mssClampValueIPv4, actualMSS, "MSS should be clamped to MTU - 40")
 	})
 
 	t.Run("SYN packet with low MSS unchanged", func(t *testing.T) {
@@ -1140,7 +1150,7 @@ func TestMSSClamping(t *testing.T) {
 		d := parsePacket(t, packet)
 		require.Len(t, d.tcp.Options, 1, "Should have MSS option")
 		actualMSS := binary.BigEndian.Uint16(d.tcp.Options[0].OptionData)
-		require.Equal(t, expectedMSSValue, actualMSS, "MSS in SYN-ACK should be clamped")
+		require.Equal(t, manager.mssClampValueIPv4, actualMSS, "MSS in SYN-ACK should be clamped")
 	})
 
 	t.Run("Non-SYN packet unchanged", func(t *testing.T) {
@@ -1312,13 +1322,18 @@ func TestShouldForward(t *testing.T) {
 		d := &decoder{
 			decoded: []gopacket.LayerType{},
 		}
-		d.parser = gopacket.NewDecodingLayerParser(
+		d.parser4 = gopacket.NewDecodingLayerParser(
 			layers.LayerTypeIPv4,
 			&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
 		)
-		d.parser.IgnoreUnsupported = true
+		d.parser4.IgnoreUnsupported = true
+		d.parser6 = gopacket.NewDecodingLayerParser(
+			layers.LayerTypeIPv6,
+			&d.eth, &d.ip4, &d.ip6, &d.icmp4, &d.icmp6, &d.tcp, &d.udp,
+		)
+		d.parser6.IgnoreUnsupported = true
 
-		err = d.parser.DecodeLayers(buf.Bytes(), &d.decoded)
+		err = d.decodePacket(buf.Bytes())
 		require.NoError(t, err)
 
 		return d
