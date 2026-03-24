@@ -10011,35 +10011,6 @@ paths:
           "$ref": "#/components/responses/conflict"
         '500':
           "$ref": "#/components/responses/internal_error"
-  /api/reverse-proxies/clusters/{clusterId}:
-    delete:
-      summary: Delete a self-hosted proxy cluster
-      description: Removes a self-hosted (BYOP) proxy cluster and disconnects it. Only self-hosted clusters can be deleted.
-      tags: [ Services ]
-      security:
-        - BearerAuth: [ ]
-        - TokenAuth: [ ]
-      parameters:
-        - in: path
-          name: clusterId
-          required: true
-          schema:
-            type: string
-          description: The unique identifier of the proxy cluster
-      responses:
-        '200':
-          description: Proxy cluster deleted successfully
-          content: { }
-        '400':
-          "$ref": "#/components/responses/bad_request"
-        '401':
-          "$ref": "#/components/responses/requires_authentication"
-        '403':
-          "$ref": "#/components/responses/forbidden"
-        '404':
-          "$ref": "#/components/responses/not_found"
-        '500':
-          "$ref": "#/components/responses/internal_error"
   /api/reverse-proxies/services/{serviceId}:
     get:
       summary: Retrieve a Service

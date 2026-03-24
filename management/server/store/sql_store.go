@@ -5458,7 +5458,10 @@ func isUniqueConstraintError(err error) bool {
 		return true
 	}
 	errStr := err.Error()
-	return strings.Contains(errStr, "UNIQUE constraint") || strings.Contains(errStr, "duplicate key")
+	return strings.Contains(errStr, "UNIQUE constraint") ||
+		strings.Contains(errStr, "duplicate key") ||
+		strings.Contains(errStr, "Duplicate entry") ||
+		strings.Contains(errStr, "Error 1062")
 }
 
 func (s *SqlStore) DisconnectProxy(ctx context.Context, proxyID string) error {

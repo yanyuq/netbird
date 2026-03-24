@@ -196,7 +196,11 @@ func (s *ProxyServiceServer) GetMappingUpdate(req *proto.GetMappingUpdateRequest
 
 		existingProxy, err := s.proxyManager.GetAccountProxy(ctx, *accountID)
 		if err != nil {
-			log.WithContext(ctx).Debugf("failed to get account proxy for %s: %v", *accountID, err)
+			if s, ok := nbstatus.FromError(err); ok && s.ErrorType == nbstatus.NotFound {
+				log.WithContext(ctx).Debugf("no existing BYOP proxy for account %s", *accountID)
+			} else {
+				return status.Errorf(codes.Internal, "failed to check existing proxy: %v", err)
+			}
 		}
 		if existingProxy != nil && existingProxy.ID != proxyID {
 			if existingProxy.Status == proxy.StatusConnected {
@@ -465,12 +469,21 @@ func (s *ProxyServiceServer) SendServiceUpdate(update *proto.GetMappingUpdateRes
 	}
 	s.connectedProxies.Range(func(key, value interface{}) bool {
 		conn := value.(*proxyConnection)
+		connUpdate := update
 		if conn.accountID != nil && len(updateAccountIDs) > 0 {
 			if _, ok := updateAccountIDs[*conn.accountID]; !ok {
 				return true
 			}
+			filtered := filterMappingsForAccount(update.Mapping, *conn.accountID)
+			if len(filtered) == 0 {
+				return true
+			}
+			connUpdate = &proto.GetMappingUpdateResponse{
+				Mapping:              filtered,
+				InitialSyncComplete:  update.InitialSyncComplete,
+			}
 		}
-		resp := s.perProxyMessage(update, conn.proxyID)
+		resp := s.perProxyMessage(connUpdate, conn.proxyID)
 		if resp == nil {
 			return true
 		}
@@ -492,6 +505,16 @@ func (s *ProxyServiceServer) ForceDisconnect(proxyID string) {
 		s.connectedProxies.Delete(proxyID)
 		log.WithFields(log.Fields{"proxyID": proxyID}).Info("force disconnected proxy")
 	}
+}
+
+func filterMappingsForAccount(mappings []*proto.ProxyMapping, accountID string) []*proto.ProxyMapping {
+	var filtered []*proto.ProxyMapping
+	for _, m := range mappings {
+		if m.AccountId == accountID {
+			filtered = append(filtered, m)
+		}
+	}
+	return filtered
 }
 
 // GetConnectedProxies returns a list of connected proxy IDs

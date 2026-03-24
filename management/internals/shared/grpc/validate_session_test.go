@@ -339,7 +339,7 @@ func (m *testValidateSessionProxyManager) Disconnect(_ context.Context, _ string
 	return nil
 }
 
-func (m *testValidateSessionProxyManager) Heartbeat(_ context.Context, _ string) error {
+func (m *testValidateSessionProxyManager) Heartbeat(_ context.Context, _, _, _ string) error {
 	return nil
 }
 
