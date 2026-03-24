@@ -4997,7 +4997,6 @@ func (s *SqlStore) GetServiceByDomain(ctx context.Context, domain string) (*rpse
 	return service, nil
 }
 
-
 func (s *SqlStore) GetServices(ctx context.Context, lockStrength LockingStrength) ([]*rpservice.Service, error) {
 	tx := s.db.Preload("Targets")
 	if lockStrength != LockingStrengthNone {
@@ -5408,17 +5407,35 @@ func (s *SqlStore) SaveProxy(ctx context.Context, p *proxy.Proxy) error {
 	return nil
 }
 
-// UpdateProxyHeartbeat updates the last_seen timestamp for a proxy
-func (s *SqlStore) UpdateProxyHeartbeat(ctx context.Context, proxyID string) error {
+// UpdateProxyHeartbeat updates the last_seen timestamp for a proxy or creates a new entry if it doesn't exist
+func (s *SqlStore) UpdateProxyHeartbeat(ctx context.Context, proxyID, clusterAddress, ipAddress string) error {
+	now := time.Now()
+
 	result := s.db.WithContext(ctx).
 		Model(&proxy.Proxy{}).
 		Where("id = ? AND status = ?", proxyID, "connected").
-		Update("last_seen", time.Now())
+		Update("last_seen", now)
 
 	if result.Error != nil {
 		log.WithContext(ctx).Errorf("failed to update proxy heartbeat: %v", result.Error)
 		return status.Errorf(status.Internal, "failed to update proxy heartbeat")
 	}
+
+	if result.RowsAffected == 0 {
+		p := &proxy.Proxy{
+			ID:             proxyID,
+			ClusterAddress: clusterAddress,
+			IPAddress:      ipAddress,
+			LastSeen:       now,
+			ConnectedAt:    &now,
+			Status:         "connected",
+		}
+		if err := s.db.WithContext(ctx).Save(p).Error; err != nil {
+			log.WithContext(ctx).Errorf("failed to create proxy on heartbeat: %v", err)
+			return status.Errorf(status.Internal, "failed to create proxy on heartbeat")
+		}
+	}
+
 	return nil
 }
 
@@ -5438,6 +5455,24 @@ func (s *SqlStore) GetActiveProxyClusterAddresses(ctx context.Context) ([]string
 	}
 
 	return addresses, nil
+}
+
+// GetActiveProxyClusters returns all active proxy clusters with their connected proxy count.
+func (s *SqlStore) GetActiveProxyClusters(ctx context.Context) ([]proxy.Cluster, error) {
+	var clusters []proxy.Cluster
+
+	result := s.db.Model(&proxy.Proxy{}).
+		Select("cluster_address as address, COUNT(*) as connected_proxies").
+		Where("status = ? AND last_seen > ?", "connected", time.Now().Add(-2*time.Minute)).
+		Group("cluster_address").
+		Scan(&clusters)
+
+	if result.Error != nil {
+		log.WithContext(ctx).Errorf("failed to get active proxy clusters: %v", result.Error)
+		return nil, status.Errorf(status.Internal, "get active proxy clusters")
+	}
+
+	return clusters, nil
 }
 
 // CleanupStaleProxies deletes proxies that haven't sent heartbeat in the specified duration
