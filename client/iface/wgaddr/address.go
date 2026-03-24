@@ -71,6 +71,9 @@ func (addr *Address) SetIPv6FromCompact(raw []byte) error {
 	if err != nil {
 		return fmt.Errorf("decode v6 overlay address: %w", err)
 	}
+	if !prefix.Addr().Is6() {
+		return fmt.Errorf("expected IPv6 address, got %s", prefix.Addr())
+	}
 	addr.IPv6 = prefix.Addr()
 	addr.IPv6Net = prefix.Masked()
 	return nil
@@ -78,7 +81,7 @@ func (addr *Address) SetIPv6FromCompact(raw []byte) error {
 
 // ClearIPv6 removes the IPv6 overlay address, leaving only v4.
 //
-//nolint:recvcheck // ClearIPv6 is the only mutating method on this otherwise value-type struct.
+//nolint:recvcheck
 func (addr *Address) ClearIPv6() {
 	addr.IPv6 = netip.Addr{}
 	addr.IPv6Net = netip.Prefix{}
