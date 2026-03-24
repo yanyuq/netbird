@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func (m *mockStore) GetProxyByAccountID(ctx context.Context, accountID string) (
 	if m.getProxyByAccountIDFunc != nil {
 		return m.getProxyByAccountIDFunc(ctx, accountID)
 	}
-	return nil, nil
+	return nil, fmt.Errorf("proxy not found for account %s", accountID)
 }
 func (m *mockStore) CountProxiesByAccountID(ctx context.Context, accountID string) (int64, error) {
 	if m.countProxiesByAccountIDFunc != nil {

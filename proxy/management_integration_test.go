@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -229,8 +230,8 @@ func (m *testProxyManager) CleanupStale(_ context.Context, _ time.Duration) erro
 	return nil
 }
 
-func (m *testProxyManager) GetAccountProxy(_ context.Context, _ string) (*nbproxy.Proxy, error) {
-	return nil, nil
+func (m *testProxyManager) GetAccountProxy(_ context.Context, accountID string) (*nbproxy.Proxy, error) {
+	return nil, fmt.Errorf("proxy not found for account %s", accountID)
 }
 
 func (m *testProxyManager) CountAccountProxies(_ context.Context, _ string) (int64, error) {
