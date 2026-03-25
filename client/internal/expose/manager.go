@@ -4,11 +4,14 @@ import (
 	"context"
 	"time"
 
-	mgm "github.com/netbirdio/netbird/shared/management/client"
 	log "github.com/sirupsen/logrus"
+
+	mgm "github.com/netbirdio/netbird/shared/management/client"
 )
 
-const renewTimeout = 10 * time.Second
+const (
+	renewTimeout = 10 * time.Second
+)
 
 // Response holds the response from exposing a service.
 type Response struct {
@@ -22,7 +25,7 @@ type Request struct {
 	NamePrefix string
 	Domain     string
 	Port       uint16
-	Protocol   int
+	Protocol   ProtocolType
 	Pin        string
 	Password   string
 	UserGroups []string
