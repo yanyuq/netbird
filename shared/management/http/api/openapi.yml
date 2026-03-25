@@ -9307,8 +9307,9 @@ paths:
         required: true
         description: The unique identifier of the Google IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Google Integrations
@@ -9434,8 +9435,9 @@ paths:
         required: true
         description: The unique identifier of the Google IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     post:
       tags:
         - IDP SCIM Integrations Google Integrations
@@ -9480,8 +9482,9 @@ paths:
         required: true
         description: The unique identifier of the Google IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Google Integrations
@@ -9593,8 +9596,9 @@ paths:
         required: true
         description: The unique identifier of the Azure IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Azure Integrations
@@ -9720,8 +9724,9 @@ paths:
         required: true
         description: The unique identifier of the Azure IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     post:
       tags:
         - IDP SCIM Integrations Azure Integrations
@@ -9766,8 +9771,9 @@ paths:
         required: true
         description: The unique identifier of the Azure IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Azure Integrations
@@ -9879,8 +9885,9 @@ paths:
         required: true
         description: The unique identifier of the Okta SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Okta SCIM Integrations
@@ -10006,8 +10013,9 @@ paths:
         required: true
         description: The unique identifier of the Okta SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     post:
       tags:
         - IDP SCIM Integrations Okta SCIM Integrations
@@ -10052,8 +10060,9 @@ paths:
         required: true
         description: The unique identifier of the Okta SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations Okta SCIM Integrations
@@ -10165,8 +10174,9 @@ paths:
         required: true
         description: The unique identifier of the SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations
@@ -10292,8 +10302,9 @@ paths:
         required: true
         description: The unique identifier of the SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     post:
       tags:
         - IDP SCIM Integrations
@@ -10338,8 +10349,9 @@ paths:
         required: true
         description: The unique identifier of the SCIM IDP integration.
         schema:
-          type: string
-          example: "ch8i4ug6lnn4g9hqv7m0"
+          type: integer
+          format: int64
+          example: 1
     get:
       tags:
         - IDP SCIM Integrations
