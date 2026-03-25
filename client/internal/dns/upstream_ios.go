@@ -69,12 +69,9 @@ func (u *upstreamResolverIOS) exchange(ctx context.Context, upstream string, r *
 	} else {
 		upstreamIP = upstreamIP.Unmap()
 	}
-	// TODO: IsPrivate is a rough heuristic. It misses public IPs routed through
-	// the tunnel (e.g. 9.9.9.9 via network route) and incorrectly matches local
-	// LAN private IPs. Replace with a check against the active route table or
-	// the set of routed prefixes from the network map.
-	needsPrivate := u.lNet.Contains(upstreamIP) || upstreamIP.IsPrivate() ||
-		(u.lNetV6.IsValid() && u.lNetV6.Contains(upstreamIP))
+	needsPrivate := u.lNet.Contains(upstreamIP) ||
+		u.lNetV6.Contains(upstreamIP) ||
+		(u.routeMatch != nil && u.routeMatch(upstreamIP))
 	if needsPrivate {
 		var bindIP netip.Addr
 		switch {
