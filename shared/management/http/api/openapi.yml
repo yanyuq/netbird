@@ -9238,7 +9238,7 @@ paths:
   /api/integrations/google-idp:
     post:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Create Google IDP Integration
       description: Creates a new Google Workspace IDP integration
       operationId: createGoogleIntegration
@@ -9275,7 +9275,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Get All Google IDP Integrations
       description: Retrieves all Google Workspace IDP integrations for the authenticated account
       operationId: getAllGoogleIntegrations
@@ -9312,7 +9312,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Get Google IDP Integration
       description: Retrieves a Google IDP integration by ID.
       operationId: getGoogleIntegration
@@ -9349,7 +9349,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Update Google IDP Integration
       description: Updates an existing Google Workspace IDP integration.
       operationId: updateGoogleIntegration
@@ -9392,7 +9392,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Delete Google IDP Integration
       description: Deletes a Google IDP integration by ID.
       operationId: deleteGoogleIntegration
@@ -9440,7 +9440,7 @@ paths:
           example: 1
     post:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Sync Google IDP Integration
       description: Triggers a manual synchronization for a Google IDP integration.
       operationId: syncGoogleIntegration
@@ -9487,7 +9487,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Google Integrations
+        - IDP Google Integrations
       summary: Get Google Integration Sync Logs
       description: Retrieves synchronization logs for a Google IDP integration.
       operationId: getGoogleIntegrationLogs
@@ -9527,7 +9527,7 @@ paths:
   /api/integrations/azure-idp:
     post:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Create Azure IDP Integration
       description: Creates a new Azure AD IDP integration
       operationId: createAzureIntegration
@@ -9564,7 +9564,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Get All Azure IDP Integrations
       description: Retrieves all Azure AD IDP integrations for the authenticated account
       operationId: getAllAzureIntegrations
@@ -9601,7 +9601,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Get Azure IDP Integration
       description: Retrieves an Azure IDP integration by ID.
       operationId: getAzureIntegration
@@ -9638,7 +9638,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Update Azure IDP Integration
       description: Updates an existing Azure AD IDP integration.
       operationId: updateAzureIntegration
@@ -9681,7 +9681,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Delete Azure IDP Integration
       description: Deletes an Azure IDP integration by ID.
       operationId: deleteAzureIntegration
@@ -9729,7 +9729,7 @@ paths:
           example: 1
     post:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Sync Azure IDP Integration
       description: Triggers a manual synchronization for an Azure IDP integration.
       operationId: syncAzureIntegration
@@ -9776,7 +9776,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Azure Integrations
+        - IDP Azure Integrations
       summary: Get Azure Integration Sync Logs
       description: Retrieves synchronization logs for an Azure IDP integration.
       operationId: getAzureIntegrationLogs
@@ -9816,7 +9816,7 @@ paths:
   /api/integrations/okta-scim-idp:
     post:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Create Okta SCIM IDP Integration
       description: Creates a new Okta SCIM IDP integration
       operationId: createOktaScimIntegration
@@ -9853,7 +9853,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Get All Okta SCIM IDP Integrations
       description: Retrieves all Okta SCIM IDP integrations for the authenticated account
       operationId: getAllOktaScimIntegrations
@@ -9890,7 +9890,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Get Okta SCIM IDP Integration
       description: Retrieves an Okta SCIM IDP integration by ID.
       operationId: getOktaScimIntegration
@@ -9927,7 +9927,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Update Okta SCIM IDP Integration
       description: Updates an existing Okta SCIM IDP integration.
       operationId: updateOktaScimIntegration
@@ -9970,7 +9970,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Delete Okta SCIM IDP Integration
       description: Deletes an Okta SCIM IDP integration by ID.
       operationId: deleteOktaScimIntegration
@@ -10018,7 +10018,7 @@ paths:
           example: 1
     post:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Regenerate Okta SCIM Token
       description: Regenerates the SCIM API token for an Okta SCIM IDP integration.
       operationId: regenerateOktaScimToken
@@ -10065,7 +10065,7 @@ paths:
           example: 1
     get:
       tags:
-        - IDP SCIM Integrations Okta SCIM Integrations
+        - IDP Okta SCIM Integrations
       summary: Get Okta SCIM Integration Sync Logs
       description: Retrieves synchronization logs for an Okta SCIM IDP integration.
       operationId: getOktaScimIntegrationLogs
