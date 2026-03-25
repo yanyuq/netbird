@@ -376,8 +376,6 @@ func Test_Users_Delete(t *testing.T) {
 	}
 }
 
-// --- PAT Tests ---
-
 func Test_PATs_GetAll(t *testing.T) {
 	users := []struct {
 		name           string

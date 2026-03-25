@@ -19,8 +19,6 @@ import (
 	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
-// --- Networks CRUD ---
-
 func Test_Networks_GetAll(t *testing.T) {
 	users := []struct {
 		name           string
@@ -388,8 +386,6 @@ func Test_Networks_Delete_Cascades(t *testing.T) {
 	require.NoError(t, json.Unmarshal(content, &resources))
 	assert.Empty(t, resources)
 }
-
-// --- Network Resources CRUD ---
 
 func Test_NetworkResources_GetAllInNetwork(t *testing.T) {
 	users := []struct {
@@ -927,8 +923,6 @@ func Test_NetworkResources_Delete(t *testing.T) {
 		}
 	}
 }
-
-// --- Network Routers CRUD ---
 
 func Test_NetworkRouters_GetAllInNetwork(t *testing.T) {
 	users := []struct {

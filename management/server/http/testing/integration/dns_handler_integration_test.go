@@ -17,8 +17,6 @@ import (
 	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
-// --- Nameserver Group Tests ---
-
 func Test_Nameservers_GetAll(t *testing.T) {
 	users := []struct {
 		name           string
@@ -386,8 +384,6 @@ func Test_Nameservers_Delete(t *testing.T) {
 		}
 	}
 }
-
-// --- DNS Settings Tests ---
 
 func Test_DnsSettings_Get(t *testing.T) {
 	users := []struct {
