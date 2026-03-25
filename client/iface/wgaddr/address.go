@@ -1,7 +1,10 @@
 package wgaddr
 
 import (
+	"fmt"
 	"net/netip"
+
+	"github.com/netbirdio/netbird/shared/netiputil"
 )
 
 // Address WireGuard parsed address
@@ -56,9 +59,29 @@ func (addr Address) IPv6Prefix() netip.Prefix {
 	return netip.PrefixFrom(addr.IPv6, addr.IPv6Net.Bits())
 }
 
+// SetIPv6FromCompact decodes a compact prefix (5 or 17 bytes) and sets the IPv6 fields.
+// Returns an error if the bytes are invalid. A nil or empty input is a no-op.
+//
+//nolint:recvcheck
+func (addr *Address) SetIPv6FromCompact(raw []byte) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	prefix, err := netiputil.DecodePrefix(raw)
+	if err != nil {
+		return fmt.Errorf("decode v6 overlay address: %w", err)
+	}
+	if !prefix.Addr().Is6() {
+		return fmt.Errorf("expected IPv6 address, got %s", prefix.Addr())
+	}
+	addr.IPv6 = prefix.Addr()
+	addr.IPv6Net = prefix.Masked()
+	return nil
+}
+
 // ClearIPv6 removes the IPv6 overlay address, leaving only v4.
 //
-//nolint:recvcheck // ClearIPv6 is the only mutating method on this otherwise value-type struct.
+//nolint:recvcheck
 func (addr *Address) ClearIPv6() {
 	addr.IPv6 = netip.Addr{}
 	addr.IPv6Net = netip.Prefix{}
