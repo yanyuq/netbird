@@ -4426,8 +4426,8 @@ components:
           description: Represents a Google Workspace IDP integration
           required:
             - id
-            - customerId
-            - syncInterval
+            - customer_id
+            - sync_interval
             - enabled
             - group_prefixes
             - user_group_prefixes
@@ -4437,11 +4437,11 @@ components:
               type: integer
               description: The unique identifier for the integration
               example: 1
-            customerId:
+            customer_id:
               type: string
               description: Customer ID from Google Workspace
               example: "C01234567"
-            syncInterval:
+            sync_interval:
               type: integer
               description: Sync interval in seconds
               example: 300
@@ -4513,9 +4513,9 @@ components:
           description: Represents an Azure AD IDP integration
           required:
             - id
-            - clientId
-            - tenantId
-            - syncInterval
+            - client_id
+            - tenant_id
+            - sync_interval
             - enabled
             - group_prefixes
             - user_group_prefixes
@@ -4526,15 +4526,15 @@ components:
               type: integer
               description: The unique identifier for the integration
               example: 1
-            clientId:
+            client_id:
               type: string
               description: Azure AD application (client) ID
               example: "12345678-1234-1234-1234-123456789012"
-            tenantId:
+            tenant_id:
               type: string
               description: Azure AD tenant ID
               example: "87654321-4321-4321-4321-210987654321"
-            syncInterval:
+            sync_interval:
               type: integer
               description: Sync interval in seconds
               example: 300

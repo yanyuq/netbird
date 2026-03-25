@@ -1471,7 +1471,7 @@ type AvailablePorts struct {
 // AzureIntegration defines model for AzureIntegration.
 type AzureIntegration struct {
 	// ClientId Azure AD application (client) ID
-	ClientId string `json:"clientId"`
+	ClientId string `json:"client_id"`
 
 	// Enabled Whether the integration is enabled
 	Enabled bool `json:"enabled"`
@@ -1489,10 +1489,10 @@ type AzureIntegration struct {
 	LastSyncedAt time.Time `json:"last_synced_at"`
 
 	// SyncInterval Sync interval in seconds
-	SyncInterval int `json:"syncInterval"`
+	SyncInterval int `json:"sync_interval"`
 
 	// TenantId Azure AD tenant ID
-	TenantId string `json:"tenantId"`
+	TenantId string `json:"tenant_id"`
 
 	// UserGroupPrefixes List of start_with string patterns for groups which users to sync
 	UserGroupPrefixes []string `json:"user_group_prefixes"`
@@ -2055,7 +2055,7 @@ type GetTenantsResponse = []TenantResponse
 // GoogleIntegration defines model for GoogleIntegration.
 type GoogleIntegration struct {
 	// CustomerId Customer ID from Google Workspace
-	CustomerId string `json:"customerId"`
+	CustomerId string `json:"customer_id"`
 
 	// Enabled Whether the integration is enabled
 	Enabled bool `json:"enabled"`
@@ -2070,7 +2070,7 @@ type GoogleIntegration struct {
 	LastSyncedAt time.Time `json:"last_synced_at"`
 
 	// SyncInterval Sync interval in seconds
-	SyncInterval int `json:"syncInterval"`
+	SyncInterval int `json:"sync_interval"`
 
 	// UserGroupPrefixes List of start_with string patterns for groups which users to sync
 	UserGroupPrefixes []string `json:"user_group_prefixes"`
