@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/netbirdio/netbird/management/server/activity"
 	"github.com/netbirdio/netbird/management/server/http/handlers/setup_keys"
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools/channel"
@@ -254,7 +255,7 @@ func Test_SetupKeys_Create(t *testing.T) {
 			expectedResponse: nil,
 		},
 		{
-			name:        "Create Setup Key",
+			name:        "Create Setup Key with nil AutoGroups",
 			requestType: http.MethodPost,
 			requestPath: "/api/setup-keys",
 			requestBody: &api.CreateSetupKeyRequest{
@@ -308,11 +309,13 @@ func Test_SetupKeys_Create(t *testing.T) {
 					t.Fatalf("Sent content is not in correct json format; %v", err)
 				}
 
+				gotID := got.Id
+
 				validateCreatedKey(t, tc.expectedResponse, got)
 
-				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, testing_tools.TestUserId, got.Id)
+				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, activity.SystemInitiator, gotID)
 				if err != nil {
-					return
+					t.Fatalf("Failed to get setup key from store: %v", err)
 				}
 
 				validateCreatedKey(t, tc.expectedResponse, setup_keys.ToResponseBody(key))
@@ -571,7 +574,7 @@ func Test_SetupKeys_Update(t *testing.T) {
 
 	for _, tc := range tt {
 		for _, user := range users {
-			t.Run(tc.name, func(t *testing.T) {
+			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
 				apiHandler, am, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/setup_keys.sql", nil, true)
 
 				body, err := json.Marshal(tc.requestBody)
@@ -594,11 +597,13 @@ func Test_SetupKeys_Update(t *testing.T) {
 					t.Fatalf("Sent content is not in correct json format; %v", err)
 				}
 
+				gotID := got.Id
+
 				validateCreatedKey(t, tc.expectedResponse, got)
 
-				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, testing_tools.TestUserId, got.Id)
+				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, activity.SystemInitiator, gotID)
 				if err != nil {
-					return
+					t.Fatalf("Failed to get setup key from store: %v", err)
 				}
 
 				validateCreatedKey(t, tc.expectedResponse, setup_keys.ToResponseBody(key))
@@ -759,8 +764,8 @@ func Test_SetupKeys_Get(t *testing.T) {
 
 				apiHandler.ServeHTTP(recorder, req)
 
-				content, expectRespnose := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
-				if !expectRespnose {
+				content, expectResponse := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				if !expectResponse {
 					return
 				}
 				got := &api.SetupKey{}
@@ -768,11 +773,13 @@ func Test_SetupKeys_Get(t *testing.T) {
 					t.Fatalf("Sent content is not in correct json format; %v", err)
 				}
 
+				gotID := got.Id
+
 				validateCreatedKey(t, tc.expectedResponse, got)
 
-				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, testing_tools.TestUserId, got.Id)
+				key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, activity.SystemInitiator, gotID)
 				if err != nil {
-					return
+					t.Fatalf("Failed to get setup key from store: %v", err)
 				}
 
 				validateCreatedKey(t, tc.expectedResponse, setup_keys.ToResponseBody(key))
@@ -929,11 +936,13 @@ func Test_SetupKeys_GetAll(t *testing.T) {
 				})
 
 				for i := range tc.expectedResponse {
+					gotID := got[i].Id
+
 					validateCreatedKey(t, tc.expectedResponse[i], &got[i])
 
-					key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, testing_tools.TestUserId, got[i].Id)
+					key, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, activity.SystemInitiator, gotID)
 					if err != nil {
-						return
+						t.Fatalf("Failed to get setup key from store: %v", err)
 					}
 
 					validateCreatedKey(t, tc.expectedResponse[i], setup_keys.ToResponseBody(key))
@@ -1104,7 +1113,7 @@ func Test_SetupKeys_Delete(t *testing.T) {
 					t.Fatalf("Sent content is not in correct json format; %v", err)
 				}
 
-				_, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, testing_tools.TestUserId, got.Id)
+				_, err := am.GetSetupKey(context.Background(), testing_tools.TestAccountId, activity.SystemInitiator, got.Id)
 				assert.Errorf(t, err, "Expected error when trying to get deleted key")
 
 				select {
@@ -1120,7 +1129,7 @@ func Test_SetupKeys_Delete(t *testing.T) {
 func validateCreatedKey(t *testing.T, expectedKey *api.SetupKey, got *api.SetupKey) {
 	t.Helper()
 
-	if got.Expires.After(time.Now().Add(-1*time.Minute)) && got.Expires.Before(time.Now().Add(testing_tools.ExpiresIn*time.Second)) ||
+	if (got.Expires.After(time.Now().Add(-1*time.Minute)) && got.Expires.Before(time.Now().Add(testing_tools.ExpiresIn*time.Second))) ||
 		got.Expires.After(time.Date(2300, 01, 01, 0, 0, 0, 0, time.Local)) ||
 		got.Expires.Before(time.Date(1950, 01, 01, 0, 0, 0, 0, time.Local)) {
 		got.Expires = time.Time{}
