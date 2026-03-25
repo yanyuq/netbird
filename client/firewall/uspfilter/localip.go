@@ -11,12 +11,10 @@ import (
 	"github.com/netbirdio/netbird/client/firewall/uspfilter/common"
 )
 
-// localIPSnapshot is an immutable snapshot of local IP addresses.
-// The entire snapshot is swapped atomically so reads are lock-free.
+// localIPSnapshot is an immutable snapshot of local IP addresses, swapped
+// atomically so reads are lock-free.
 type localIPSnapshot struct {
 	ips map[netip.Addr]struct{}
-	// loopbackV4 is pre-checked to avoid map lookups for 127.0.0.0/8
-	loopbackV4 bool
 }
 
 type localIPManager struct {
@@ -95,10 +93,7 @@ func (m *localIPManager) UpdateLocalIPs(iface common.IFaceMapper) (err error) {
 		}
 	}
 
-	m.snapshot.Store(&localIPSnapshot{
-		ips:        ips,
-		loopbackV4: true,
-	})
+	m.snapshot.Store(&localIPSnapshot{ips: ips})
 
 	log.Debugf("Local IP addresses: %v", addresses)
 	return nil
@@ -108,11 +103,8 @@ func (m *localIPManager) UpdateLocalIPs(iface common.IFaceMapper) (err error) {
 func (m *localIPManager) IsLocalIP(ip netip.Addr) bool {
 	s := m.snapshot.Load()
 
-	// Fast path for 127.x.x.x without map lookup
-	if s.loopbackV4 && ip.Is4() {
-		if ip.As4()[0] == 127 {
-			return true
-		}
+	if ip.Is4() && ip.As4()[0] == 127 {
+		return true
 	}
 
 	_, found := s.ips[ip]
