@@ -4267,96 +4267,81 @@ components:
           description: Status of agent firewall. Can be one of Disabled, Enabled, Pending Isolation, Isolated, Pending Release.
           example: "Enabled"
 
+    IntegrationSyncFilters:
+      type: object
+      properties:
+        group_prefixes:
+          type: array
+          description: List of start_with string patterns for groups to sync
+          items:
+            type: string
+          example: [ "Engineering", "Sales" ]
+        user_group_prefixes:
+          type: array
+          description: List of start_with string patterns for groups which users to sync
+          items:
+            type: string
+          example: [ "Users" ]
+    IntegrationEnabled:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the integration is enabled
+          example: true
     CreateScimIntegrationRequest:
-      type: object
-      description: Request payload for creating an SCIM IDP integration
-      required:
-        - prefix
-        - provider
-      properties:
-        prefix:
-          type: string
-          description: The connection prefix used for the SCIM provider
-        provider:
-          type: string
-          description: Name of the SCIM identity provider
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
+      allOf:
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for creating an SCIM IDP integration
+          required:
+            - prefix
+            - provider
+          properties:
+            prefix:
+              type: string
+              description: The connection prefix used for the SCIM provider
+            provider:
+              type: string
+              description: Name of the SCIM identity provider
     UpdateScimIntegrationRequest:
-      type: object
-      description: Request payload for updating an SCIM IDP integration
-      properties:
-        enabled:
-          type: boolean
-          description: Indicates whether the integration is enabled
-          example: true
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for updating an SCIM IDP integration
     ScimIntegration:
-      type: object
-      description: Represents a SCIM IDP integration
-      required:
-        - id
-        - enabled
-        - provider
-        - group_prefixes
-        - user_group_prefixes
-        - auth_token
-        - last_synced_at
-      properties:
-        id:
-          type: integer
-          format: int64
-          description: The unique identifier for the integration
-          example: 123
-        enabled:
-          type: boolean
-          description: Indicates whether the integration is enabled
-          example: true
-        provider:
-          type: string
-          description: Name of the SCIM identity provider
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
-        auth_token:
-          type: string
-          description: SCIM API token (full on creation, masked otherwise)
-          example: "nbs_abc***********************************"
-        last_synced_at:
-          type: string
-          format: date-time
-          description: Timestamp of when the integration was last synced
-          example: "2023-05-15T10:30:00Z"
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Represents a SCIM IDP integration
+          required:
+            - id
+            - enabled
+            - provider
+            - group_prefixes
+            - user_group_prefixes
+            - auth_token
+            - last_synced_at
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: The unique identifier for the integration
+              example: 123
+            provider:
+              type: string
+              description: Name of the SCIM identity provider
+            auth_token:
+              type: string
+              description: SCIM API token (full on creation, masked otherwise)
+              example: "nbs_abc***********************************"
+            last_synced_at:
+              type: string
+              format: date-time
+              description: Timestamp of when the integration was last synced
+              example: "2023-05-15T10:30:00Z"
     IdpIntegrationSyncLog:
       type: object
       description: Represents a synchronization log entry for an integration
@@ -4395,318 +4380,218 @@ components:
           description: The newly generated SCIM API token
           example: "nbs_F3f0d..."
     CreateGoogleIntegrationRequest:
-      type: object
-      description: Request payload for creating a Google Workspace IDP integration
-      required:
-        - service_account_key
-        - customer_id
-      properties:
-        service_account_key:
-          type: string
-          description: Base64-encoded Google service account key
-          example: "eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii..."
-        customer_id:
-          type: string
-          description: Customer ID from Google Workspace Account Settings
-          example: "C01234567"
-        sync_interval:
-          type: integer
-          description: Sync interval in seconds (minimum 300). Defaults to 300 if not specified.
-          minimum: 300
-          example: 300
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
+      allOf:
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for creating a Google Workspace IDP integration
+          required:
+            - service_account_key
+            - customer_id
+          properties:
+            service_account_key:
+              type: string
+              description: Base64-encoded Google service account key
+              example: "eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii..."
+            customer_id:
+              type: string
+              description: Customer ID from Google Workspace Account Settings
+              example: "C01234567"
+            sync_interval:
+              type: integer
+              description: Sync interval in seconds (minimum 300). Defaults to 300 if not specified.
+              minimum: 300
+              example: 300
     UpdateGoogleIntegrationRequest:
-      type: object
-      description: Request payload for updating a Google Workspace IDP integration. All fields are optional.
-      properties:
-        service_account_key:
-          type: string
-          description: Base64-encoded Google service account key
-        customer_id:
-          type: string
-          description: Customer ID from Google Workspace Account Settings
-        sync_interval:
-          type: integer
-          description: Sync interval in seconds (minimum 300)
-          minimum: 300
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for updating a Google Workspace IDP integration. All fields are optional.
+          properties:
+            service_account_key:
+              type: string
+              description: Base64-encoded Google service account key
+            customer_id:
+              type: string
+              description: Customer ID from Google Workspace Account Settings
+            sync_interval:
+              type: integer
+              description: Sync interval in seconds (minimum 300)
+              minimum: 300
     GoogleIntegration:
-      type: object
-      description: Represents a Google Workspace IDP integration
-      required:
-        - id
-        - customerId
-        - syncInterval
-        - enabled
-        - group_prefixes
-        - user_group_prefixes
-        - last_synced_at
-      properties:
-        id:
-          type: integer
-          description: The unique identifier for the integration
-          example: 1
-        customerId:
-          type: string
-          description: Customer ID from Google Workspace
-          example: "C01234567"
-        syncInterval:
-          type: integer
-          description: Sync interval in seconds
-          example: 300
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-          example: true
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
-        last_synced_at:
-          type: string
-          format: date-time
-          description: Timestamp of the last synchronization
-          example: "2023-05-15T10:30:00Z"
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Represents a Google Workspace IDP integration
+          required:
+            - id
+            - customerId
+            - syncInterval
+            - enabled
+            - group_prefixes
+            - user_group_prefixes
+            - last_synced_at
+          properties:
+            id:
+              type: integer
+              description: The unique identifier for the integration
+              example: 1
+            customerId:
+              type: string
+              description: Customer ID from Google Workspace
+              example: "C01234567"
+            syncInterval:
+              type: integer
+              description: Sync interval in seconds
+              example: 300
+            last_synced_at:
+              type: string
+              format: date-time
+              description: Timestamp of the last synchronization
+              example: "2023-05-15T10:30:00Z"
     CreateAzureIntegrationRequest:
-      type: object
-      description: Request payload for creating an Azure AD IDP integration
-      required:
-        - client_secret
-        - client_id
-        - tenant_id
-        - host
-      properties:
-        client_secret:
-          type: string
-          description: Base64-encoded Azure AD client secret
-          example: "c2VjcmV0..."
-        client_id:
-          type: string
-          description: Azure AD application (client) ID
-          example: "12345678-1234-1234-1234-123456789012"
-        tenant_id:
-          type: string
-          description: Azure AD tenant ID
-          example: "87654321-4321-4321-4321-210987654321"
-        sync_interval:
-          type: integer
-          description: Sync interval in seconds (minimum 300). Defaults to 300 if not specified.
-          minimum: 300
-          example: 300
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
-        host:
-          type: string
-          description: Azure host domain for the Graph API
-          enum:
-            - microsoft.com
-            - microsoft.us
-          example: "microsoft.com"
+      allOf:
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for creating an Azure AD IDP integration
+          required:
+            - client_secret
+            - client_id
+            - tenant_id
+            - host
+          properties:
+            client_secret:
+              type: string
+              description: Base64-encoded Azure AD client secret
+              example: "c2VjcmV0..."
+            client_id:
+              type: string
+              description: Azure AD application (client) ID
+              example: "12345678-1234-1234-1234-123456789012"
+            tenant_id:
+              type: string
+              description: Azure AD tenant ID
+              example: "87654321-4321-4321-4321-210987654321"
+            sync_interval:
+              type: integer
+              description: Sync interval in seconds (minimum 300). Defaults to 300 if not specified.
+              minimum: 300
+              example: 300
+            host:
+              type: string
+              description: Azure host domain for the Graph API
+              enum:
+                - microsoft.com
+                - microsoft.us
+              example: "microsoft.com"
     UpdateAzureIntegrationRequest:
-      type: object
-      description: Request payload for updating an Azure AD IDP integration. All fields are optional.
-      properties:
-        client_secret:
-          type: string
-          description: Base64-encoded Azure AD client secret
-        client_id:
-          type: string
-          description: Azure AD application (client) ID
-        tenant_id:
-          type: string
-          description: Azure AD tenant ID
-        sync_interval:
-          type: integer
-          description: Sync interval in seconds (minimum 300)
-          minimum: 300
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for updating an Azure AD IDP integration. All fields are optional.
+          properties:
+            client_secret:
+              type: string
+              description: Base64-encoded Azure AD client secret
+            client_id:
+              type: string
+              description: Azure AD application (client) ID
+            tenant_id:
+              type: string
+              description: Azure AD tenant ID
+            sync_interval:
+              type: integer
+              description: Sync interval in seconds (minimum 300)
+              minimum: 300
     AzureIntegration:
-      type: object
-      description: Represents an Azure AD IDP integration
-      required:
-        - id
-        - clientId
-        - tenantId
-        - syncInterval
-        - enabled
-        - group_prefixes
-        - user_group_prefixes
-        - host
-        - last_synced_at
-      properties:
-        id:
-          type: integer
-          description: The unique identifier for the integration
-          example: 1
-        clientId:
-          type: string
-          description: Azure AD application (client) ID
-          example: "12345678-1234-1234-1234-123456789012"
-        tenantId:
-          type: string
-          description: Azure AD tenant ID
-          example: "87654321-4321-4321-4321-210987654321"
-        syncInterval:
-          type: integer
-          description: Sync interval in seconds
-          example: 300
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-          example: true
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
-        host:
-          type: string
-          description: Azure host domain for the Graph API
-          example: "microsoft.com"
-        last_synced_at:
-          type: string
-          format: date-time
-          description: Timestamp of the last synchronization
-          example: "2023-05-15T10:30:00Z"
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Represents an Azure AD IDP integration
+          required:
+            - id
+            - clientId
+            - tenantId
+            - syncInterval
+            - enabled
+            - group_prefixes
+            - user_group_prefixes
+            - host
+            - last_synced_at
+          properties:
+            id:
+              type: integer
+              description: The unique identifier for the integration
+              example: 1
+            clientId:
+              type: string
+              description: Azure AD application (client) ID
+              example: "12345678-1234-1234-1234-123456789012"
+            tenantId:
+              type: string
+              description: Azure AD tenant ID
+              example: "87654321-4321-4321-4321-210987654321"
+            syncInterval:
+              type: integer
+              description: Sync interval in seconds
+              example: 300
+            host:
+              type: string
+              description: Azure host domain for the Graph API
+              example: "microsoft.com"
+            last_synced_at:
+              type: string
+              format: date-time
+              description: Timestamp of the last synchronization
+              example: "2023-05-15T10:30:00Z"
     CreateOktaScimIntegrationRequest:
-      type: object
-      description: Request payload for creating an Okta SCIM IDP integration
-      required:
-        - connection_name
-      properties:
-        connection_name:
-          type: string
-          description: The Okta enterprise connection name on Auth0
-          example: "my-okta-connection"
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
+      allOf:
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for creating an Okta SCIM IDP integration
+          required:
+            - connection_name
+          properties:
+            connection_name:
+              type: string
+              description: The Okta enterprise connection name on Auth0
+              example: "my-okta-connection"
     UpdateOktaScimIntegrationRequest:
-      type: object
-      description: Request payload for updating an Okta SCIM IDP integration. All fields are optional.
-      properties:
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Request payload for updating an Okta SCIM IDP integration. All fields are optional.
     OktaScimIntegration:
-      type: object
-      description: Represents an Okta SCIM IDP integration
-      required:
-        - id
-        - enabled
-        - group_prefixes
-        - user_group_prefixes
-        - auth_token
-        - last_synced_at
-      properties:
-        id:
-          type: integer
-          description: The unique identifier for the integration
-          example: 1
-        enabled:
-          type: boolean
-          description: Whether the integration is enabled
-          example: true
-        group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups to sync
-          items:
-            type: string
-          example: [ "Engineering", "Sales" ]
-        user_group_prefixes:
-          type: array
-          description: List of start_with string patterns for groups which users to sync
-          items:
-            type: string
-          example: [ "Users" ]
-        auth_token:
-          type: string
-          description: SCIM API token (full on creation/regeneration, masked on retrieval)
-          example: "nbs_abc***********************************"
-        last_synced_at:
-          type: string
-          format: date-time
-          description: Timestamp of the last synchronization
-          example: "2023-05-15T10:30:00Z"
+      allOf:
+        - $ref: '#/components/schemas/IntegrationEnabled'
+        - $ref: '#/components/schemas/IntegrationSyncFilters'
+        - type: object
+          description: Represents an Okta SCIM IDP integration
+          required:
+            - id
+            - enabled
+            - group_prefixes
+            - user_group_prefixes
+            - auth_token
+            - last_synced_at
+          properties:
+            id:
+              type: integer
+              description: The unique identifier for the integration
+              example: 1
+            auth_token:
+              type: string
+              description: SCIM API token (full on creation/regeneration, masked on retrieval)
+              example: "nbs_abc***********************************"
+            last_synced_at:
+              type: string
+              format: date-time
+              description: Timestamp of the last synchronization
+              example: "2023-05-15T10:30:00Z"
     SyncResult:
       type: object
       description: Response for a manual sync trigger

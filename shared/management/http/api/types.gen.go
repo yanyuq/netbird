@@ -1468,7 +1468,7 @@ type AvailablePorts struct {
 	Udp int `json:"udp"`
 }
 
-// AzureIntegration Represents an Azure AD IDP integration
+// AzureIntegration defines model for AzureIntegration.
 type AzureIntegration struct {
 	// ClientId Azure AD application (client) ID
 	ClientId string `json:"clientId"`
@@ -1605,7 +1605,7 @@ type Country struct {
 // CountryCode 2-letter ISO 3166-1 alpha-2 code that represents the country
 type CountryCode = string
 
-// CreateAzureIntegrationRequest Request payload for creating an Azure AD IDP integration
+// CreateAzureIntegrationRequest defines model for CreateAzureIntegrationRequest.
 type CreateAzureIntegrationRequest struct {
 	// ClientId Azure AD application (client) ID
 	ClientId string `json:"client_id"`
@@ -1632,7 +1632,7 @@ type CreateAzureIntegrationRequest struct {
 // CreateAzureIntegrationRequestHost Azure host domain for the Graph API
 type CreateAzureIntegrationRequestHost string
 
-// CreateGoogleIntegrationRequest Request payload for creating a Google Workspace IDP integration
+// CreateGoogleIntegrationRequest defines model for CreateGoogleIntegrationRequest.
 type CreateGoogleIntegrationRequest struct {
 	// CustomerId Customer ID from Google Workspace Account Settings
 	CustomerId string `json:"customer_id"`
@@ -1665,7 +1665,7 @@ type CreateIntegrationRequest struct {
 // CreateIntegrationRequestPlatform The event streaming platform to integrate with (e.g., "datadog", "s3", "firehose"). This field is used for creation. For updates (PUT), this field, if sent, is ignored by the backend.
 type CreateIntegrationRequestPlatform string
 
-// CreateOktaScimIntegrationRequest Request payload for creating an Okta SCIM IDP integration
+// CreateOktaScimIntegrationRequest defines model for CreateOktaScimIntegrationRequest.
 type CreateOktaScimIntegrationRequest struct {
 	// ConnectionName The Okta enterprise connection name on Auth0
 	ConnectionName string `json:"connection_name"`
@@ -1677,7 +1677,7 @@ type CreateOktaScimIntegrationRequest struct {
 	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
 }
 
-// CreateScimIntegrationRequest Request payload for creating an SCIM IDP integration
+// CreateScimIntegrationRequest defines model for CreateScimIntegrationRequest.
 type CreateScimIntegrationRequest struct {
 	// GroupPrefixes List of start_with string patterns for groups to sync
 	GroupPrefixes *[]string `json:"group_prefixes,omitempty"`
@@ -2052,7 +2052,7 @@ type GeoLocationCheckAction string
 // GetTenantsResponse defines model for GetTenantsResponse.
 type GetTenantsResponse = []TenantResponse
 
-// GoogleIntegration Represents a Google Workspace IDP integration
+// GoogleIntegration defines model for GoogleIntegration.
 type GoogleIntegration struct {
 	// CustomerId Customer ID from Google Workspace
 	CustomerId string `json:"customerId"`
@@ -2367,6 +2367,12 @@ type InstanceVersionInfo struct {
 	ManagementUpdateAvailable bool `json:"management_update_available"`
 }
 
+// IntegrationEnabled defines model for IntegrationEnabled.
+type IntegrationEnabled struct {
+	// Enabled Whether the integration is enabled
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
 // IntegrationResponse Represents an event streaming integration.
 type IntegrationResponse struct {
 	// AccountId The identifier of the account this integration belongs to.
@@ -2393,6 +2399,15 @@ type IntegrationResponse struct {
 
 // IntegrationResponsePlatform The event streaming platform.
 type IntegrationResponsePlatform string
+
+// IntegrationSyncFilters defines model for IntegrationSyncFilters.
+type IntegrationSyncFilters struct {
+	// GroupPrefixes List of start_with string patterns for groups to sync
+	GroupPrefixes *[]string `json:"group_prefixes,omitempty"`
+
+	// UserGroupPrefixes List of start_with string patterns for groups which users to sync
+	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
+}
 
 // InvoicePDFResponse defines model for InvoicePDFResponse.
 type InvoicePDFResponse struct {
@@ -2813,7 +2828,7 @@ type OSVersionCheck struct {
 	Windows *MinKernelVersionCheck `json:"windows,omitempty"`
 }
 
-// OktaScimIntegration Represents an Okta SCIM IDP integration
+// OktaScimIntegration defines model for OktaScimIntegration.
 type OktaScimIntegration struct {
 	// AuthToken SCIM API token (full on creation/regeneration, masked on retrieval)
 	AuthToken string `json:"auth_token"`
@@ -3683,12 +3698,12 @@ type RulePortRange struct {
 	Start int `json:"start"`
 }
 
-// ScimIntegration Represents a SCIM IDP integration
+// ScimIntegration defines model for ScimIntegration.
 type ScimIntegration struct {
 	// AuthToken SCIM API token (full on creation, masked otherwise)
 	AuthToken string `json:"auth_token"`
 
-	// Enabled Indicates whether the integration is enabled
+	// Enabled Whether the integration is enabled
 	Enabled bool `json:"enabled"`
 
 	// GroupPrefixes List of start_with string patterns for groups to sync
@@ -4151,7 +4166,7 @@ type TenantResponse struct {
 // TenantResponseStatus The status of the tenant
 type TenantResponseStatus string
 
-// UpdateAzureIntegrationRequest Request payload for updating an Azure AD IDP integration. All fields are optional.
+// UpdateAzureIntegrationRequest defines model for UpdateAzureIntegrationRequest.
 type UpdateAzureIntegrationRequest struct {
 	// ClientId Azure AD application (client) ID
 	ClientId *string `json:"client_id,omitempty"`
@@ -4175,7 +4190,7 @@ type UpdateAzureIntegrationRequest struct {
 	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
 }
 
-// UpdateGoogleIntegrationRequest Request payload for updating a Google Workspace IDP integration. All fields are optional.
+// UpdateGoogleIntegrationRequest defines model for UpdateGoogleIntegrationRequest.
 type UpdateGoogleIntegrationRequest struct {
 	// CustomerId Customer ID from Google Workspace Account Settings
 	CustomerId *string `json:"customer_id,omitempty"`
@@ -4196,7 +4211,7 @@ type UpdateGoogleIntegrationRequest struct {
 	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
 }
 
-// UpdateOktaScimIntegrationRequest Request payload for updating an Okta SCIM IDP integration. All fields are optional.
+// UpdateOktaScimIntegrationRequest defines model for UpdateOktaScimIntegrationRequest.
 type UpdateOktaScimIntegrationRequest struct {
 	// Enabled Whether the integration is enabled
 	Enabled *bool `json:"enabled,omitempty"`
@@ -4208,9 +4223,9 @@ type UpdateOktaScimIntegrationRequest struct {
 	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
 }
 
-// UpdateScimIntegrationRequest Request payload for updating an SCIM IDP integration
+// UpdateScimIntegrationRequest defines model for UpdateScimIntegrationRequest.
 type UpdateScimIntegrationRequest struct {
-	// Enabled Indicates whether the integration is enabled
+	// Enabled Whether the integration is enabled
 	Enabled *bool `json:"enabled,omitempty"`
 
 	// GroupPrefixes List of start_with string patterns for groups to sync
