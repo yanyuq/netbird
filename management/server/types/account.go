@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -316,7 +315,7 @@ func (a *Account) GetPeerNetworkMap(
 	}
 
 	routesUpdate := a.GetRoutesToSync(ctx, peerID, peersToConnect, peerGroups)
-	routesFirewallRules := a.GetPeerRoutesFirewallRules(ctx, peerID, validatedPeersMap)
+	routesFirewallRules := a.GetPeerRoutesFirewallRules(ctx, peerID, validatedPeersMap, peer.SupportsIPv6())
 	isRouter, networkResourcesRoutes, sourcePeers := a.GetNetworkResourcesRoutesToSync(ctx, peerID, resourcePolicies, routers)
 	var networkResourcesFirewallRules []*RouteFirewallRule
 	if isRouter {
@@ -445,7 +444,7 @@ func getPeerNSGroups(account *Account, peerID string) []*nbdns.NameServerGroup {
 // peerIsNameserver returns true if the peer is a nameserver for a nsGroup
 func peerIsNameserver(peer *nbpeer.Peer, nsGroup *nbdns.NameServerGroup) bool {
 	for _, ns := range nsGroup.NameServers {
-		if peer.IP.Equal(ns.IP.AsSlice()) {
+		if peer.IP == ns.IP {
 			return true
 		}
 	}
@@ -512,6 +511,8 @@ func (a *Account) GetPeersCustomZone(ctx context.Context, dnsDomain string) nbdn
 
 	domainSuffix := "." + dnsDomain
 
+	ipv6AllowedPeers := a.peerIPv6AllowedSet()
+
 	var sb strings.Builder
 	for _, peer := range a.Peers {
 		if peer.DNSLabel == "" {
@@ -523,13 +524,28 @@ func (a *Account) GetPeersCustomZone(ctx context.Context, dnsDomain string) nbdn
 		sb.WriteString(peer.DNSLabel)
 		sb.WriteString(domainSuffix)
 
+		fqdn := sb.String()
 		customZone.Records = append(customZone.Records, nbdns.SimpleRecord{
-			Name:  sb.String(),
+			Name:  fqdn,
 			Type:  int(dns.TypeA),
 			Class: nbdns.DefaultClass,
 			TTL:   defaultTTL,
 			RData: peer.IP.String(),
 		})
+		// Only advertise AAAA for peers that have a valid IPv6, whose client supports it,
+		// and that belong to an IPv6-enabled group. Old clients don't configure v6 on their
+		// WireGuard interface, so resolving their AAAA causes connections to hang.
+		_, peerAllowed := ipv6AllowedPeers[peer.ID]
+		hasIPv6 := peer.IPv6.IsValid() && peer.SupportsIPv6() && peerAllowed
+		if hasIPv6 {
+			customZone.Records = append(customZone.Records, nbdns.SimpleRecord{
+				Name:  fqdn,
+				Type:  int(dns.TypeAAAA),
+				Class: nbdns.DefaultClass,
+				TTL:   defaultTTL,
+				RData: peer.IPv6.String(),
+			})
+		}
 		sb.Reset()
 
 		for _, extraLabel := range peer.ExtraDNSLabels {
@@ -537,13 +553,23 @@ func (a *Account) GetPeersCustomZone(ctx context.Context, dnsDomain string) nbdn
 			sb.WriteString(extraLabel)
 			sb.WriteString(domainSuffix)
 
+			extraFqdn := sb.String()
 			customZone.Records = append(customZone.Records, nbdns.SimpleRecord{
-				Name:  sb.String(),
+				Name:  extraFqdn,
 				Type:  int(dns.TypeA),
 				Class: nbdns.DefaultClass,
 				TTL:   defaultTTL,
 				RData: peer.IP.String(),
 			})
+			if hasIPv6 {
+				customZone.Records = append(customZone.Records, nbdns.SimpleRecord{
+					Name:  extraFqdn,
+					Type:  int(dns.TypeAAAA),
+					Class: nbdns.DefaultClass,
+					TTL:   defaultTTL,
+					RData: peer.IPv6.String(),
+				})
+			}
 			sb.Reset()
 		}
 
@@ -824,8 +850,43 @@ func (a *Account) GetPeerGroups(peerID string) LookupMap {
 	return groupList
 }
 
-func (a *Account) GetTakenIPs() []net.IP {
-	var takenIps []net.IP
+// PeerIPv6Allowed reports whether the given peer is in any of the account's IPv6 enabled groups.
+// Returns false if IPv6 is disabled or no groups are configured.
+func (a *Account) PeerIPv6Allowed(peerID string) bool {
+	if len(a.Settings.IPv6EnabledGroups) == 0 {
+		return false
+	}
+
+	for _, groupID := range a.Settings.IPv6EnabledGroups {
+		group, ok := a.Groups[groupID]
+		if !ok {
+			continue
+		}
+		if slices.Contains(group.Peers, peerID) {
+			return true
+		}
+	}
+	return false
+}
+
+// peerIPv6AllowedSet returns a set of peer IDs that belong to any IPv6-enabled group.
+func (a *Account) peerIPv6AllowedSet() map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, groupID := range a.Settings.IPv6EnabledGroups {
+		group, ok := a.Groups[groupID]
+		if !ok {
+			continue
+		}
+		for _, peerID := range group.Peers {
+			result[peerID] = struct{}{}
+		}
+	}
+	return result
+}
+
+// GetTakenIPs returns all peer IP addresses currently allocated in the account.
+func (a *Account) GetTakenIPs() []netip.Addr {
+	takenIps := make([]netip.Addr, 0, len(a.Peers))
 	for _, existingPeer := range a.Peers {
 		takenIps = append(takenIps, existingPeer.IP)
 	}
@@ -1178,10 +1239,31 @@ func (a *Account) connResourcesGenerator(ctx context.Context, targetPeer *nbpeer
 
 				if len(rule.Ports) == 0 && len(rule.PortRanges) == 0 {
 					rules = append(rules, &fr)
-					continue
+				} else {
+					rules = append(rules, expandPortsAndRanges(fr, rule, targetPeer)...)
 				}
 
-				rules = append(rules, expandPortsAndRanges(fr, rule, targetPeer)...)
+				if peer.IPv6.IsValid() && targetPeer.SupportsIPv6() {
+					v6IP := peer.IPv6.String()
+					v6RuleID := rule.ID + v6IP + strconv.Itoa(direction) +
+						string(protocol) + string(rule.Action) + strings.Join(rule.Ports, ",")
+					if _, ok := rulesExists[v6RuleID]; !ok {
+						rulesExists[v6RuleID] = struct{}{}
+						v6fr := FirewallRule{
+							PolicyID:  rule.ID,
+							PeerIP:    v6IP,
+							Direction: direction,
+							Action:    string(rule.Action),
+							Protocol:  string(protocol),
+							IPv6:      true,
+						}
+						if len(rule.Ports) == 0 && len(rule.PortRanges) == 0 {
+							rules = append(rules, &v6fr)
+						} else {
+							rules = append(rules, expandPortsAndRanges(v6fr, rule, targetPeer)...)
+						}
+					}
+				}
 			}
 		}, func() ([]*nbpeer.Peer, []*FirewallRule) {
 			return peers, rules
@@ -1297,7 +1379,7 @@ func (a *Account) GetPostureChecks(postureChecksID string) *posture.Checks {
 }
 
 // GetPeerRoutesFirewallRules gets the routes firewall rules associated with a routing peer ID for the account.
-func (a *Account) GetPeerRoutesFirewallRules(ctx context.Context, peerID string, validatedPeersMap map[string]struct{}) []*RouteFirewallRule {
+func (a *Account) GetPeerRoutesFirewallRules(ctx context.Context, peerID string, validatedPeersMap map[string]struct{}, includeIPv6 bool) []*RouteFirewallRule {
 	routesFirewallRules := make([]*RouteFirewallRule, 0, len(a.Routes))
 
 	enabledRoutes, _ := a.getRoutingPeerRoutes(ctx, peerID)
@@ -1313,7 +1395,7 @@ func (a *Account) GetPeerRoutesFirewallRules(ctx context.Context, peerID string,
 
 		for _, accessGroup := range route.AccessControlGroups {
 			policies := GetAllRoutePoliciesFromGroups(a, []string{accessGroup})
-			rules := a.getRouteFirewallRules(ctx, peerID, policies, route, validatedPeersMap, distributionPeers)
+			rules := a.getRouteFirewallRules(ctx, peerID, policies, route, validatedPeersMap, distributionPeers, includeIPv6)
 			routesFirewallRules = append(routesFirewallRules, rules...)
 		}
 	}
@@ -1321,7 +1403,7 @@ func (a *Account) GetPeerRoutesFirewallRules(ctx context.Context, peerID string,
 	return routesFirewallRules
 }
 
-func (a *Account) getRouteFirewallRules(ctx context.Context, peerID string, policies []*Policy, route *route.Route, validatedPeersMap map[string]struct{}, distributionPeers map[string]struct{}) []*RouteFirewallRule {
+func (a *Account) getRouteFirewallRules(ctx context.Context, peerID string, policies []*Policy, route *route.Route, validatedPeersMap map[string]struct{}, distributionPeers map[string]struct{}, includeIPv6 bool) []*RouteFirewallRule {
 	var fwRules []*RouteFirewallRule
 	for _, policy := range policies {
 		if !policy.Enabled {
@@ -1334,7 +1416,7 @@ func (a *Account) getRouteFirewallRules(ctx context.Context, peerID string, poli
 			}
 
 			rulePeers := a.getRulePeers(rule, policy.SourcePostureChecks, peerID, distributionPeers, validatedPeersMap)
-			rules := generateRouteFirewallRules(ctx, route, rule, rulePeers, FirewallRuleDirectionIN)
+			rules := generateRouteFirewallRules(ctx, route, rule, rulePeers, FirewallRuleDirectionIN, includeIPv6)
 			fwRules = append(fwRules, rules...)
 		}
 	}
@@ -1460,7 +1542,7 @@ func (a *Account) GetPeerNetworkResourceFirewallRules(ctx context.Context, peer 
 		resourceAppliedPolicies := resourcePolicies[string(route.GetResourceID())]
 		distributionPeers := getPoliciesSourcePeers(resourceAppliedPolicies, a.Groups)
 
-		rules := a.getRouteFirewallRules(ctx, peer.ID, resourceAppliedPolicies, route, validatedPeersMap, distributionPeers)
+		rules := a.getRouteFirewallRules(ctx, peer.ID, resourceAppliedPolicies, route, validatedPeersMap, distributionPeers, peer.SupportsIPv6())
 		for _, rule := range rules {
 			if len(rule.SourceRanges) > 0 {
 				routesFirewallRules = append(routesFirewallRules, rule)
@@ -1990,24 +2072,32 @@ func peerSupportedFirewallFeatures(peerVer string) supportedFeatures {
 }
 
 // filterZoneRecordsForPeers filters DNS records to only include peers to connect.
+// AAAA records are excluded when the requesting peer lacks IPv6 capability.
 func filterZoneRecordsForPeers(peer *nbpeer.Peer, customZone nbdns.CustomZone, peersToConnect, expiredPeers []*nbpeer.Peer) []nbdns.SimpleRecord {
 	filteredRecords := make([]nbdns.SimpleRecord, 0, len(customZone.Records))
-	peerIPs := make(map[string]struct{})
+	peerIPs := make(map[netip.Addr]struct{}, len(peersToConnect)+len(expiredPeers)+2)
+	includeIPv6 := peer.SupportsIPv6()
 
-	// Add peer's own IP to include its own DNS records
-	peerIPs[peer.IP.String()] = struct{}{}
-
-	for _, peerToConnect := range peersToConnect {
-		peerIPs[peerToConnect.IP.String()] = struct{}{}
+	addPeerIPs := func(p *nbpeer.Peer) {
+		peerIPs[p.IP] = struct{}{}
+		if includeIPv6 && p.IPv6.IsValid() {
+			peerIPs[p.IPv6] = struct{}{}
+		}
 	}
 
-	for _, expiredPeer := range expiredPeers {
-		peerIPs[expiredPeer.IP.String()] = struct{}{}
+	addPeerIPs(peer)
+	for _, p := range peersToConnect {
+		addPeerIPs(p)
+	}
+	for _, p := range expiredPeers {
+		addPeerIPs(p)
 	}
 
 	for _, record := range customZone.Records {
-		if _, exists := peerIPs[record.RData]; exists {
-			filteredRecords = append(filteredRecords, record)
+		if addr, err := netip.ParseAddr(record.RData); err == nil {
+			if _, exists := peerIPs[addr.Unmap()]; exists {
+				filteredRecords = append(filteredRecords, record)
+			}
 		}
 	}
 

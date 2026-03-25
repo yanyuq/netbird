@@ -40,6 +40,10 @@ type FirewallRule struct {
 
 	// PortRange represents the range of ports for a firewall rule
 	PortRange RulePortRange
+
+	// IPv6 marks rules targeting IPv6 addresses. Set at generation time when the
+	// target peer supports IPv6. Also checked at proto conversion as defense-in-depth.
+	IPv6 bool
 }
 
 // Equal checks if two firewall rules are equal.
@@ -48,16 +52,26 @@ func (r *FirewallRule) Equal(other *FirewallRule) bool {
 }
 
 // generateRouteFirewallRules generates a list of firewall rules for a given route.
-func generateRouteFirewallRules(ctx context.Context, route *nbroute.Route, rule *PolicyRule, groupPeers []*nbpeer.Peer, direction int) []*RouteFirewallRule {
+// For static routes, source ranges match the destination family (v4 or v6).
+// For dynamic routes (domain-based), separate v4 and v6 rules are generated
+// so the routing peer's forwarding chain allows both address families.
+func generateRouteFirewallRules(ctx context.Context, route *nbroute.Route, rule *PolicyRule, groupPeers []*nbpeer.Peer, direction int, includeIPv6 bool) []*RouteFirewallRule {
 	rulesExists := make(map[string]struct{})
 	rules := make([]*RouteFirewallRule, 0)
 
-	sourceRanges := make([]string, 0, len(groupPeers))
-	for _, peer := range groupPeers {
-		if peer == nil {
-			continue
-		}
-		sourceRanges = append(sourceRanges, fmt.Sprintf(AllowedIPsFormat, peer.IP))
+	v4Sources, v6Sources := splitPeerSourcesByFamily(groupPeers)
+
+	isV6Route := route.Network.Addr().Is6()
+
+	// Skip v6 destination routes entirely for peers without IPv6 support
+	if isV6Route && !includeIPv6 {
+		return rules
+	}
+
+	// Pick sources matching the destination family
+	sourceRanges := v4Sources
+	if isV6Route {
+		sourceRanges = v6Sources
 	}
 
 	baseRule := RouteFirewallRule{
@@ -69,18 +83,49 @@ func generateRouteFirewallRules(ctx context.Context, route *nbroute.Route, rule 
 		Protocol:     string(rule.Protocol),
 		Domains:      route.Domains,
 		IsDynamic:    route.IsDynamic(),
+		IPv6:         isV6Route,
 	}
 
-	// generate rule for port range
 	if len(rule.Ports) == 0 {
 		rules = append(rules, generateRulesWithPortRanges(baseRule, rule, rulesExists)...)
 	} else {
 		rules = append(rules, generateRulesWithPorts(ctx, baseRule, rule, rulesExists)...)
 	}
 
-	// TODO: generate IPv6 rules for dynamic routes
+	// Generate v6 counterpart for dynamic routes and 0.0.0.0/0 exit node routes.
+	isDefaultV4 := !isV6Route && route.Network.Bits() == 0
+	if includeIPv6 && (route.IsDynamic() || isDefaultV4) && len(v6Sources) > 0 {
+		v6Rule := baseRule
+		v6Rule.SourceRanges = v6Sources
+		v6Rule.IPv6 = true
+		if isDefaultV4 {
+			v6Rule.Destination = "::/0"
+			v6Rule.RouteID = route.ID + "-v6"
+		}
+		if len(rule.Ports) == 0 {
+			rules = append(rules, generateRulesWithPortRanges(v6Rule, rule, rulesExists)...)
+		} else {
+			rules = append(rules, generateRulesWithPorts(ctx, v6Rule, rule, rulesExists)...)
+		}
+	}
 
 	return rules
+}
+
+// splitPeerSourcesByFamily separates peer IPs into v4 (/32) and v6 (/128) source ranges.
+func splitPeerSourcesByFamily(groupPeers []*nbpeer.Peer) (v4, v6 []string) {
+	v4 = make([]string, 0, len(groupPeers))
+	v6 = make([]string, 0, len(groupPeers))
+	for _, peer := range groupPeers {
+		if peer == nil {
+			continue
+		}
+		v4 = append(v4, fmt.Sprintf(AllowedIPsFormat, peer.IP))
+		if peer.IPv6.IsValid() {
+			v6 = append(v6, fmt.Sprintf(AllowedIPsV6Format, peer.IPv6))
+		}
+	}
+	return
 }
 
 // generateRulesForPeer generates rules for a given peer based on ports and port ranges.

@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"maps"
-	"net"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -117,12 +116,16 @@ func (c *NetworkMapComponents) Calculate(ctx context.Context) *NetworkMap {
 	peersToConnect, expiredPeers := c.filterPeersByLoginExpiration(aclPeers)
 
 	routesUpdate := c.getRoutesToSync(targetPeerID, peersToConnect, peerGroups)
-	routesFirewallRules := c.getPeerRoutesFirewallRules(ctx, targetPeerID)
+	includeIPv6 := false
+	if p := c.Peers[targetPeerID]; p != nil {
+		includeIPv6 = p.SupportsIPv6()
+	}
+	routesFirewallRules := c.getPeerRoutesFirewallRules(ctx, targetPeerID, includeIPv6)
 
 	isRouter, networkResourcesRoutes, sourcePeers := c.getNetworkResourcesRoutesToSync(targetPeerID)
 	var networkResourcesFirewallRules []*RouteFirewallRule
 	if isRouter {
-		networkResourcesFirewallRules = c.getPeerNetworkResourceFirewallRules(ctx, targetPeerID, networkResourcesRoutes)
+		networkResourcesFirewallRules = c.getPeerNetworkResourceFirewallRules(ctx, targetPeerID, networkResourcesRoutes, includeIPv6)
 	}
 
 	peersToConnectIncludingRouters := c.addNetworksRoutingPeers(
@@ -298,7 +301,7 @@ func (c *NetworkMapComponents) connResourcesGenerator(targetPeer *nbpeer.Peer) (
 					peersExists[peer.ID] = struct{}{}
 				}
 
-				peerIP := net.IP(peer.IP).String()
+				peerIP := peer.IP.String()
 
 				fr := FirewallRule{
 					PolicyID:  rule.ID,
@@ -317,10 +320,30 @@ func (c *NetworkMapComponents) connResourcesGenerator(targetPeer *nbpeer.Peer) (
 
 				if len(rule.Ports) == 0 && len(rule.PortRanges) == 0 {
 					rules = append(rules, &fr)
-					continue
+				} else {
+					rules = append(rules, expandPortsAndRanges(fr, rule, targetPeer)...)
 				}
 
-				rules = append(rules, expandPortsAndRanges(fr, rule, targetPeer)...)
+				if peer.IPv6.IsValid() && targetPeer.SupportsIPv6() {
+					v6IP := peer.IPv6.String()
+					v6RuleID := rule.ID + v6IP + dirStr + protocolStr + actionStr + portsJoined
+					if _, ok := rulesExists[v6RuleID]; !ok {
+						rulesExists[v6RuleID] = struct{}{}
+						v6fr := FirewallRule{
+							PolicyID:  rule.ID,
+							PeerIP:    v6IP,
+							Direction: direction,
+							Action:    actionStr,
+							Protocol:  protocolStr,
+							IPv6:      true,
+						}
+						if len(rule.Ports) == 0 && len(rule.PortRanges) == 0 {
+							rules = append(rules, &v6fr)
+						} else {
+							rules = append(rules, expandPortsAndRanges(v6fr, rule, targetPeer)...)
+						}
+					}
+				}
 			}
 		}, func() ([]*nbpeer.Peer, []*FirewallRule) {
 			return peers, rules
@@ -552,7 +575,7 @@ func (c *NetworkMapComponents) filterRoutesFromPeersOfSameHAGroup(routes []*rout
 	return filteredRoutes
 }
 
-func (c *NetworkMapComponents) getPeerRoutesFirewallRules(ctx context.Context, peerID string) []*RouteFirewallRule {
+func (c *NetworkMapComponents) getPeerRoutesFirewallRules(ctx context.Context, peerID string, includeIPv6 bool) []*RouteFirewallRule {
 	routesFirewallRules := make([]*RouteFirewallRule, 0)
 
 	enabledRoutes, _ := c.getRoutingPeerRoutes(peerID)
@@ -567,7 +590,7 @@ func (c *NetworkMapComponents) getPeerRoutesFirewallRules(ctx context.Context, p
 
 		for _, accessGroup := range r.AccessControlGroups {
 			policies := c.getAllRoutePoliciesFromGroups([]string{accessGroup})
-			rules := c.getRouteFirewallRules(ctx, peerID, policies, r, distributionPeers)
+			rules := c.getRouteFirewallRules(ctx, peerID, policies, r, distributionPeers, includeIPv6)
 			routesFirewallRules = append(routesFirewallRules, rules...)
 		}
 	}
@@ -634,7 +657,7 @@ func (c *NetworkMapComponents) getAllRoutePoliciesFromGroups(accessControlGroups
 	return routePolicies
 }
 
-func (c *NetworkMapComponents) getRouteFirewallRules(ctx context.Context, peerID string, policies []*Policy, route *route.Route, distributionPeers map[string]struct{}) []*RouteFirewallRule {
+func (c *NetworkMapComponents) getRouteFirewallRules(ctx context.Context, peerID string, policies []*Policy, route *route.Route, distributionPeers map[string]struct{}, includeIPv6 bool) []*RouteFirewallRule {
 	var fwRules []*RouteFirewallRule
 	for _, policy := range policies {
 		if !policy.Enabled {
@@ -647,7 +670,7 @@ func (c *NetworkMapComponents) getRouteFirewallRules(ctx context.Context, peerID
 			}
 
 			rulePeers := c.getRulePeers(rule, policy.SourcePostureChecks, peerID, distributionPeers)
-			rules := generateRouteFirewallRules(ctx, route, rule, rulePeers, FirewallRuleDirectionIN)
+			rules := generateRouteFirewallRules(ctx, route, rule, rulePeers, FirewallRuleDirectionIN, includeIPv6)
 			fwRules = append(fwRules, rules...)
 		}
 	}
@@ -798,7 +821,7 @@ func (c *NetworkMapComponents) getPostureValidPeers(inputPeers []string, posture
 	return dest
 }
 
-func (c *NetworkMapComponents) getPeerNetworkResourceFirewallRules(ctx context.Context, peerID string, routes []*route.Route) []*RouteFirewallRule {
+func (c *NetworkMapComponents) getPeerNetworkResourceFirewallRules(ctx context.Context, peerID string, routes []*route.Route, includeIPv6 bool) []*RouteFirewallRule {
 	routesFirewallRules := make([]*RouteFirewallRule, 0)
 
 	peerInfo := c.GetPeerInfo(peerID)
@@ -815,7 +838,7 @@ func (c *NetworkMapComponents) getPeerNetworkResourceFirewallRules(ctx context.C
 		resourcePolicies := c.ResourcePoliciesMap[resourceID]
 		distributionPeers := c.getPoliciesSourcePeers(resourcePolicies)
 
-		rules := c.getRouteFirewallRules(ctx, peerID, resourcePolicies, r, distributionPeers)
+		rules := c.getRouteFirewallRules(ctx, peerID, resourcePolicies, r, distributionPeers, includeIPv6)
 		for _, rule := range rules {
 			if len(rule.SourceRanges) > 0 {
 				routesFirewallRules = append(routesFirewallRules, rule)

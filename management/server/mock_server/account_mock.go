@@ -539,6 +539,10 @@ func (am *MockAccountManager) UpdatePeerIP(ctx context.Context, accountID, userI
 	return status.Errorf(codes.Unimplemented, "method UpdatePeerIP is not implemented")
 }
 
+func (am *MockAccountManager) UpdatePeerIPv6(ctx context.Context, accountID, userID, peerID string, newIPv6 netip.Addr) error {
+	return status.Errorf(codes.Unimplemented, "method UpdatePeerIPv6 is not implemented")
+}
+
 // CreateRoute mock implementation of CreateRoute from server.AccountManager interface
 func (am *MockAccountManager) CreateRoute(ctx context.Context, accountID string, prefix netip.Prefix, networkType route.NetworkType, domains domain.List, peerID string, peerGroupIDs []string, description string, netID route.NetID, masquerade bool, metric int, groups, accessControlGroupID []string, enabled bool, userID string, keepRoute bool, isSelected bool) (*route.Route, error) {
 	if am.CreateRouteFunc != nil {
