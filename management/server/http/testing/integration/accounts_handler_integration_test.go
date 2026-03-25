@@ -14,6 +14,7 @@ import (
 
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools/channel"
+	"github.com/netbirdio/netbird/management/server/types"
 	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
@@ -92,6 +93,7 @@ func Test_Accounts_Update(t *testing.T) {
 		expectedStatus int
 		requestBody    *api.AccountRequest
 		verifyResponse func(t *testing.T, account *api.Account)
+		verifyDB       func(t *testing.T, account *types.Account)
 	}{
 		{
 			name: "Disable peer login expiration",
@@ -106,6 +108,10 @@ func Test_Accounts_Update(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, false, account.Settings.PeerLoginExpirationEnabled)
 			},
+			verifyDB: func(t *testing.T, dbAccount *types.Account) {
+				t.Helper()
+				assert.Equal(t, false, dbAccount.Settings.PeerLoginExpirationEnabled)
+			},
 		},
 		{
 			name: "Update peer login expiration to 48h",
@@ -119,6 +125,10 @@ func Test_Accounts_Update(t *testing.T) {
 			verifyResponse: func(t *testing.T, account *api.Account) {
 				t.Helper()
 				assert.Equal(t, 172800, account.Settings.PeerLoginExpiration)
+			},
+			verifyDB: func(t *testing.T, dbAccount *types.Account) {
+				t.Helper()
+				assert.Equal(t, 172800*time.Second, dbAccount.Settings.PeerLoginExpiration)
 			},
 		},
 		{
@@ -135,6 +145,10 @@ func Test_Accounts_Update(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, true, account.Settings.RegularUsersViewBlocked)
 			},
+			verifyDB: func(t *testing.T, dbAccount *types.Account) {
+				t.Helper()
+				assert.Equal(t, true, dbAccount.Settings.RegularUsersViewBlocked)
+			},
 		},
 		{
 			name: "Enable groups propagation",
@@ -150,6 +164,10 @@ func Test_Accounts_Update(t *testing.T) {
 				t.Helper()
 				assert.NotNil(t, account.Settings.GroupsPropagationEnabled)
 				assert.Equal(t, true, *account.Settings.GroupsPropagationEnabled)
+			},
+			verifyDB: func(t *testing.T, dbAccount *types.Account) {
+				t.Helper()
+				assert.Equal(t, true, dbAccount.Settings.GroupsPropagationEnabled)
 			},
 		},
 		{
@@ -171,13 +189,18 @@ func Test_Accounts_Update(t *testing.T) {
 				assert.NotNil(t, account.Settings.JwtGroupsClaimName)
 				assert.Equal(t, "groups", *account.Settings.JwtGroupsClaimName)
 			},
+			verifyDB: func(t *testing.T, dbAccount *types.Account) {
+				t.Helper()
+				assert.Equal(t, true, dbAccount.Settings.JWTGroupsEnabled)
+				assert.Equal(t, "groups", dbAccount.Settings.JWTGroupsClaimName)
+			},
 		},
 	}
 
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/accounts.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/accounts.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -201,6 +224,10 @@ func Test_Accounts_Update(t *testing.T) {
 				assert.Equal(t, testing_tools.TestAccountId, got.Id)
 				assert.Equal(t, "test.com", got.Domain)
 				tc.verifyResponse(t, got)
+
+				db := testing_tools.GetDB(t, am.GetStore())
+				dbAccount := testing_tools.VerifyAccountSettings(t, db)
+				tc.verifyDB(t, dbAccount)
 			})
 		}
 	}

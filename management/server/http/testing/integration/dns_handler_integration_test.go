@@ -216,7 +216,7 @@ func Test_Nameservers_Create(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -238,6 +238,15 @@ func Test_Nameservers_Create(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify the created NS group directly in the DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbNS := testing_tools.VerifyNSGroupInDB(t, db, got.Id)
+					assert.Equal(t, got.Name, dbNS.Name)
+					assert.Equal(t, got.Primary, dbNS.Primary)
+					assert.Equal(t, len(got.Nameservers), len(dbNS.NameServers))
+					assert.Equal(t, got.Enabled, dbNS.Enabled)
+					assert.Equal(t, got.SearchDomainsEnabled, dbNS.SearchDomainsEnabled)
 				}
 			})
 		}
@@ -309,7 +318,7 @@ func Test_Nameservers_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -331,6 +340,16 @@ func Test_Nameservers_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify the updated NS group directly in the DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbNS := testing_tools.VerifyNSGroupInDB(t, db, tc.nsGroupId)
+					assert.Equal(t, "updatedNSGroup", dbNS.Name)
+					assert.Equal(t, "updated description", dbNS.Description)
+					assert.Equal(t, false, dbNS.Primary)
+					assert.Equal(t, true, dbNS.Enabled)
+					assert.Equal(t, 1, len(dbNS.NameServers))
+					assert.Equal(t, false, dbNS.SearchDomainsEnabled)
 				}
 			})
 		}
@@ -373,13 +392,19 @@ func Test_Nameservers_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
 
 				req := testing_tools.BuildRequest(t, []byte{}, http.MethodDelete, strings.Replace("/api/dns/nameservers/{nsgroupId}", "{nsgroupId}", tc.nsGroupId, 1), user.userId)
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
 				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+
+				// Verify deletion in DB for successful deletes by privileged users
+				if tc.expectedStatus == http.StatusOK && user.expectResponse {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyNSGroupNotInDB(t, db, tc.nsGroupId)
+				}
 			})
 		}
 	}
@@ -447,10 +472,12 @@ func Test_DnsSettings_Update(t *testing.T) {
 	}
 
 	tt := []struct {
-		name           string
-		requestBody    *api.PutApiDnsSettingsJSONRequestBody
-		expectedStatus int
-		verifyResponse func(t *testing.T, settings *api.DNSSettings)
+		name                       string
+		requestBody                *api.PutApiDnsSettingsJSONRequestBody
+		expectedStatus             int
+		verifyResponse             func(t *testing.T, settings *api.DNSSettings)
+		expectedDBDisabledMgmtLen  int
+		expectedDBDisabledMgmtItem string
 	}{
 		{
 			name: "Update disabled management groups",
@@ -463,6 +490,8 @@ func Test_DnsSettings_Update(t *testing.T) {
 				assert.Equal(t, 1, len(settings.DisabledManagementGroups))
 				assert.Equal(t, testing_tools.TestGroupId, settings.DisabledManagementGroups[0])
 			},
+			expectedDBDisabledMgmtLen:  1,
+			expectedDBDisabledMgmtItem: testing_tools.TestGroupId,
 		},
 		{
 			name: "Update with empty disabled management groups",
@@ -474,6 +503,7 @@ func Test_DnsSettings_Update(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, 0, len(settings.DisabledManagementGroups))
 			},
+			expectedDBDisabledMgmtLen: 0,
 		},
 		{
 			name: "Update with non-existing group",
@@ -487,7 +517,7 @@ func Test_DnsSettings_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/dns.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -509,6 +539,14 @@ func Test_DnsSettings_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify DNS settings directly in the DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbAccount := testing_tools.VerifyAccountSettings(t, db)
+					assert.Equal(t, tc.expectedDBDisabledMgmtLen, len(dbAccount.DNSSettings.DisabledManagementGroups))
+					if tc.expectedDBDisabledMgmtItem != "" {
+						assert.Contains(t, dbAccount.DNSSettings.DisabledManagementGroups, tc.expectedDBDisabledMgmtItem)
+					}
 				}
 			})
 		}

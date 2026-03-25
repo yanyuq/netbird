@@ -268,7 +268,7 @@ func Test_Policies_Create(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -290,6 +290,13 @@ func Test_Policies_Create(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify policy exists in DB with correct fields
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbPolicy := testing_tools.VerifyPolicyInDB(t, db, *got.Id)
+					assert.Equal(t, tc.requestBody.Name, dbPolicy.Name)
+					assert.Equal(t, tc.requestBody.Enabled, dbPolicy.Enabled)
+					assert.Equal(t, len(tc.requestBody.Rules), len(dbPolicy.Rules))
 				}
 			})
 		}
@@ -394,7 +401,7 @@ func Test_Policies_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -416,6 +423,12 @@ func Test_Policies_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify updated policy in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbPolicy := testing_tools.VerifyPolicyInDB(t, db, tc.policyId)
+					assert.Equal(t, tc.requestBody.Name, dbPolicy.Name)
+					assert.Equal(t, tc.requestBody.Enabled, dbPolicy.Enabled)
 				}
 			})
 		}
@@ -458,13 +471,17 @@ func Test_Policies_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/policies.sql", nil, false)
 
 				req := testing_tools.BuildRequest(t, []byte{}, http.MethodDelete, strings.Replace("/api/policies/{policyId}", "{policyId}", tc.policyId, 1), user.userId)
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
-				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				_, expectResponse := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				if expectResponse && tc.expectedStatus == http.StatusOK {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyPolicyNotInDB(t, db, tc.policyId)
+				}
 			})
 		}
 	}

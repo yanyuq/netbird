@@ -180,7 +180,7 @@ func Test_Users_Create_ServiceUser(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
+				apiHandler, am, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -202,6 +202,12 @@ func Test_Users_Create_ServiceUser(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify user in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbUser := testing_tools.VerifyUserInDB(t, db, got.Id)
+					assert.True(t, dbUser.IsServiceUser)
+					assert.Equal(t, string(dbUser.Role), string(tc.requestBody.Role))
 				}
 
 				select {
@@ -294,7 +300,7 @@ func Test_Users_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -316,6 +322,15 @@ func Test_Users_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify updated fields in DB
+					if tc.expectedStatus == http.StatusOK {
+						db := testing_tools.GetDB(t, am.GetStore())
+						dbUser := testing_tools.VerifyUserInDB(t, db, tc.targetUserId)
+						assert.Equal(t, string(dbUser.Role), string(tc.requestBody.Role))
+						assert.Equal(t, dbUser.Blocked, tc.requestBody.IsBlocked)
+						assert.ElementsMatch(t, dbUser.AutoGroups, tc.requestBody.AutoGroups)
+					}
 				}
 			})
 		}
@@ -358,13 +373,19 @@ func Test_Users_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
+				apiHandler, am, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
 
 				req := testing_tools.BuildRequest(t, []byte{}, http.MethodDelete, strings.Replace("/api/users/{userId}", "{userId}", tc.targetUserId, 1), user.userId)
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
-				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				_, expectResponse := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+
+				// Verify user deleted from DB for successful deletes
+				if expectResponse && tc.expectedStatus == http.StatusOK {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyUserNotInDB(t, db, tc.targetUserId)
+				}
 
 				select {
 				case <-done:
@@ -577,7 +598,7 @@ func Test_PATs_Create(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
+				apiHandler, am, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -599,6 +620,11 @@ func Test_PATs_Create(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify PAT in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbPAT := testing_tools.VerifyPATInDB(t, db, got.PersonalAccessToken.Id)
+					assert.Equal(t, tc.requestBody.Name, dbPAT.Name)
 				}
 
 				select {
@@ -647,7 +673,7 @@ func Test_PATs_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
+				apiHandler, am, done := channel.BuildApiBlackBoxWithDBState(t, "../testdata/users_integration.sql", nil, true)
 
 				path := strings.Replace("/api/users/{userId}/tokens/{tokenId}", "{userId}", testing_tools.TestServiceUserId, 1)
 				path = strings.Replace(path, "{tokenId}", tc.tokenId, 1)
@@ -656,7 +682,13 @@ func Test_PATs_Delete(t *testing.T) {
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
-				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				_, expectResponse := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+
+				// Verify PAT deleted from DB for successful deletes
+				if expectResponse && tc.expectedStatus == http.StatusOK {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyPATNotInDB(t, db, tc.tokenId)
+				}
 
 				select {
 				case <-done:

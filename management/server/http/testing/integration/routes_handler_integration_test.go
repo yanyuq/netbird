@@ -14,6 +14,7 @@ import (
 
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools/channel"
+	"github.com/netbirdio/netbird/route"
 	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
@@ -242,7 +243,7 @@ func Test_Routes_Create(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -264,6 +265,15 @@ func Test_Routes_Create(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify route exists in DB with correct fields
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbRoute := testing_tools.VerifyRouteInDB(t, db, route.ID(got.Id))
+					assert.Equal(t, tc.requestBody.Description, dbRoute.Description)
+					assert.Equal(t, tc.requestBody.Metric, dbRoute.Metric)
+					assert.Equal(t, tc.requestBody.Masquerade, dbRoute.Masquerade)
+					assert.Equal(t, tc.requestBody.Enabled, dbRoute.Enabled)
+					assert.Equal(t, route.NetID(tc.requestBody.NetworkId), dbRoute.NetID)
 				}
 			})
 		}
@@ -354,7 +364,7 @@ func Test_Routes_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -376,6 +386,14 @@ func Test_Routes_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify updated route in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbRoute := testing_tools.VerifyRouteInDB(t, db, route.ID(got.Id))
+					assert.Equal(t, tc.requestBody.Description, dbRoute.Description)
+					assert.Equal(t, tc.requestBody.Metric, dbRoute.Metric)
+					assert.Equal(t, tc.requestBody.Masquerade, dbRoute.Masquerade)
+					assert.Equal(t, tc.requestBody.Enabled, dbRoute.Enabled)
 				}
 			})
 		}
@@ -418,13 +436,19 @@ func Test_Routes_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/routes.sql", nil, false)
 
 				req := testing_tools.BuildRequest(t, []byte{}, http.MethodDelete, strings.Replace("/api/routes/{routeId}", "{routeId}", tc.routeId, 1), user.userId)
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
 				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+
+				// Verify route was deleted from DB for successful deletes
+				if tc.expectedStatus == http.StatusOK && user.expectResponse {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyRouteNotInDB(t, db, route.ID(tc.routeId))
+				}
 			})
 		}
 	}

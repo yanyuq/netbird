@@ -193,7 +193,7 @@ func Test_Groups_Create(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -215,6 +215,11 @@ func Test_Groups_Create(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify group exists in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbGroup := testing_tools.VerifyGroupInDB(t, db, got.Id)
+					assert.Equal(t, tc.requestBody.Name, dbGroup.Name)
 				}
 			})
 		}
@@ -291,7 +296,7 @@ func Test_Groups_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -313,6 +318,11 @@ func Test_Groups_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify updated group in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbGroup := testing_tools.VerifyGroupInDB(t, db, tc.groupId)
+					assert.Equal(t, tc.requestBody.Name, dbGroup.Name)
 				}
 			})
 		}
@@ -355,13 +365,17 @@ func Test_Groups_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/groups.sql", nil, false)
 
 				req := testing_tools.BuildRequest(t, []byte{}, http.MethodDelete, strings.Replace("/api/groups/{groupId}", "{groupId}", tc.groupId, 1), user.userId)
 				recorder := httptest.NewRecorder()
 				apiHandler.ServeHTTP(recorder, req)
 
-				testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				_, expectResponse := testing_tools.ReadResponse(t, recorder, tc.expectedStatus, user.expectResponse)
+				if expectResponse && tc.expectedStatus == http.StatusOK {
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyGroupNotInDB(t, db, tc.groupId)
+				}
 			})
 		}
 	}

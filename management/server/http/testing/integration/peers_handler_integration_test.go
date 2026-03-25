@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools"
 	"github.com/netbirdio/netbird/management/server/http/testing/testing_tools/channel"
@@ -367,7 +366,7 @@ func Test_Peers_Update(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/peers_integration.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/peers_integration.sql", nil, false)
 
 				body, err := json.Marshal(tc.requestBody)
 				if err != nil {
@@ -390,6 +389,14 @@ func Test_Peers_Update(t *testing.T) {
 						t.Fatalf("Sent content is not in correct json format; %v", err)
 					}
 					tc.verifyResponse(t, got)
+
+					// Verify updated peer in DB
+					db := testing_tools.GetDB(t, am.GetStore())
+					dbPeer := testing_tools.VerifyPeerInDB(t, db, tc.requestId)
+					assert.Equal(t, tc.requestBody.Name, dbPeer.Name)
+					assert.Equal(t, tc.requestBody.SshEnabled, dbPeer.SSHEnabled)
+					assert.Equal(t, tc.requestBody.LoginExpirationEnabled, dbPeer.LoginExpirationEnabled)
+					assert.Equal(t, tc.requestBody.InactivityExpirationEnabled, dbPeer.InactivityExpirationEnabled)
 				}
 			})
 		}
@@ -470,7 +477,7 @@ func Test_Peers_Delete(t *testing.T) {
 	for _, tc := range tt {
 		for _, user := range users {
 			t.Run(user.name+" - "+tc.name, func(t *testing.T) {
-				apiHandler, _, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/peers_integration.sql", nil, false)
+				apiHandler, am, _ := channel.BuildApiBlackBoxWithDBState(t, "../testdata/peers_integration.sql", nil, false)
 
 				req := testing_tools.BuildRequest(t, []byte{}, tc.requestType, strings.Replace(tc.requestPath, "{peerId}", tc.requestId, 1), user.userId)
 				recorder := httptest.NewRecorder()
@@ -482,12 +489,10 @@ func Test_Peers_Delete(t *testing.T) {
 					return
 				}
 
-				// Verify peer is actually deleted by trying to get it
+				// Verify peer is actually deleted in DB
 				if tc.expectedStatus == http.StatusOK {
-					getReq := testing_tools.BuildRequest(t, []byte{}, http.MethodGet, strings.Replace(tc.requestPath, "{peerId}", tc.requestId, 1), user.userId)
-					getRecorder := httptest.NewRecorder()
-					apiHandler.ServeHTTP(getRecorder, getReq)
-					require.Equal(t, http.StatusNotFound, getRecorder.Code, "Expected peer to be deleted")
+					db := testing_tools.GetDB(t, am.GetStore())
+					testing_tools.VerifyPeerNotInDB(t, db, tc.requestId)
 				}
 			})
 		}
