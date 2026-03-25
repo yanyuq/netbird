@@ -11,17 +11,12 @@ import (
 	"github.com/netbirdio/netbird/client/firewall/uspfilter/common"
 )
 
-// localIPSnapshot is an immutable snapshot of local IP addresses. The v4 bitmap
-// gives O(1) lookup for IPv4, and the v6 map handles the small number of local
-// IPv6 addresses. The entire snapshot is swapped atomically so reads are lock-free.
+// localIPSnapshot is an immutable snapshot of local IP addresses.
+// The entire snapshot is swapped atomically so reads are lock-free.
 type localIPSnapshot struct {
-	ipv4Bitmap [256]*ipv4LowBitmap
-	ipv6Set    map[netip.Addr]struct{}
-}
-
-// ipv4LowBitmap is a bitmap for the lower 24 bits of an IPv4 address
-type ipv4LowBitmap struct {
-	bitmap [8192]uint32
+	ips map[netip.Addr]struct{}
+	// loopbackV4 is pre-checked to avoid map lookups for 127.0.0.0/8
+	loopbackV4 bool
 }
 
 type localIPManager struct {
@@ -31,48 +26,12 @@ type localIPManager struct {
 func newLocalIPManager() *localIPManager {
 	m := &localIPManager{}
 	m.snapshot.Store(&localIPSnapshot{
-		ipv6Set: make(map[netip.Addr]struct{}),
+		ips: make(map[netip.Addr]struct{}),
 	})
 	return m
 }
 
-
-
-func addToSnapshot(ip netip.Addr, bitmap *[256]*ipv4LowBitmap, ipv6Set map[netip.Addr]struct{}, addresses *[]netip.Addr) {
-	if ip.Is4() {
-		ipv4 := ip.AsSlice()
-
-		high := uint16(ipv4[0])
-		low := (uint16(ipv4[1]) << 8) | (uint16(ipv4[2]) << 4) | uint16(ipv4[3])
-
-		if bitmap[high] == nil {
-			bitmap[high] = &ipv4LowBitmap{}
-		}
-
-		index := low / 32
-		bit := low % 32
-		bitmap[high].bitmap[index] |= 1 << bit
-	} else if ip.Is6() {
-		ipv6Set[ip] = struct{}{}
-	}
-
-	*addresses = append(*addresses, ip)
-}
-
-func checkBitmapBit(bitmap *[256]*ipv4LowBitmap, ip []byte) bool {
-	high := uint16(ip[0])
-	low := (uint16(ip[1]) << 8) | (uint16(ip[2]) << 4) | uint16(ip[3])
-
-	if bitmap[high] == nil {
-		return false
-	}
-
-	index := low / 32
-	bit := low % 32
-	return (bitmap[high].bitmap[index] & (1 << bit)) != 0
-}
-
-func processInterface(iface net.Interface, bitmap *[256]*ipv4LowBitmap, ipv6Set map[netip.Addr]struct{}, addresses *[]netip.Addr) {
+func processInterface(iface net.Interface, ips map[netip.Addr]struct{}, addresses *[]netip.Addr) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		log.Debugf("get addresses for interface %s failed: %v", iface.Name, err)
@@ -90,13 +49,15 @@ func processInterface(iface net.Interface, bitmap *[256]*ipv4LowBitmap, ipv6Set 
 			continue
 		}
 
-		addr, ok := netip.AddrFromSlice(ip)
+		parsed, ok := netip.AddrFromSlice(ip)
 		if !ok {
 			log.Warnf("invalid IP address %s in interface %s", ip.String(), iface.Name)
 			continue
 		}
 
-		addToSnapshot(addr.Unmap(), bitmap, ipv6Set, addresses)
+		parsed = parsed.Unmap()
+		ips[parsed] = struct{}{}
+		*addresses = append(*addresses, parsed)
 	}
 }
 
@@ -108,24 +69,20 @@ func (m *localIPManager) UpdateLocalIPs(iface common.IFaceMapper) (err error) {
 		}
 	}()
 
-	var newBitmap [256]*ipv4LowBitmap
-	newV6 := make(map[netip.Addr]struct{})
+	ips := make(map[netip.Addr]struct{})
 	var addresses []netip.Addr
 
-	// 127.0.0.0/8
-	newBitmap[127] = &ipv4LowBitmap{}
-	for i := 0; i < 8192; i++ {
-		// #nosec G602 -- bitmap is defined as [8192]uint32, loop range is correct
-		newBitmap[127].bitmap[i] = 0xFFFFFFFF
-	}
-
-	// ::1
-	newV6[netip.IPv6Loopback()] = struct{}{}
+	// loopback
+	ips[netip.AddrFrom4([4]byte{127, 0, 0, 1})] = struct{}{}
+	ips[netip.IPv6Loopback()] = struct{}{}
 
 	if iface != nil {
-		addToSnapshot(iface.Address().IP, &newBitmap, newV6, &addresses)
+		ip := iface.Address().IP
+		ips[ip] = struct{}{}
+		addresses = append(addresses, ip)
 		if v6 := iface.Address().IPv6; v6.IsValid() {
-			addToSnapshot(v6, &newBitmap, newV6, &addresses)
+			ips[v6] = struct{}{}
+			addresses = append(addresses, v6)
 		}
 	}
 
@@ -134,13 +91,13 @@ func (m *localIPManager) UpdateLocalIPs(iface common.IFaceMapper) (err error) {
 		log.Warnf("failed to get interfaces: %v", err)
 	} else {
 		for _, intf := range interfaces {
-			processInterface(intf, &newBitmap, newV6, &addresses)
+			processInterface(intf, ips, &addresses)
 		}
 	}
 
 	m.snapshot.Store(&localIPSnapshot{
-		ipv4Bitmap: newBitmap,
-		ipv6Set:    newV6,
+		ips:        ips,
+		loopbackV4: true,
 	})
 
 	log.Debugf("Local IP addresses: %v", addresses)
@@ -151,10 +108,13 @@ func (m *localIPManager) UpdateLocalIPs(iface common.IFaceMapper) (err error) {
 func (m *localIPManager) IsLocalIP(ip netip.Addr) bool {
 	s := m.snapshot.Load()
 
-	if ip.Is4() {
-		return checkBitmapBit(&s.ipv4Bitmap, ip.AsSlice())
+	// Fast path for 127.x.x.x without map lookup
+	if s.loopbackV4 && ip.Is4() {
+		if ip.As4()[0] == 127 {
+			return true
+		}
 	}
 
-	_, found := s.ipv6Set[ip]
+	_, found := s.ips[ip]
 	return found
 }

@@ -94,6 +94,15 @@ func TestLocalIPManager(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "No aliasing between similar IPs",
+			setupAddr: wgaddr.Address{
+				IP:      netip.MustParseAddr("192.168.1.1"),
+				Network: netip.MustParsePrefix("192.168.1.0/24"),
+			},
+			testIP:   netip.MustParseAddr("192.168.0.17"),
+			expected: false,
+		},
+		{
 			name: "IPv6 loopback",
 			setupAddr: wgaddr.Address{
 				IP:      netip.MustParseAddr("100.64.0.1"),

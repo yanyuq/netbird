@@ -1090,7 +1090,7 @@ func BenchmarkMSSClampingOverhead(b *testing.B) {
 			manager.mssClampEnabled = sc.enabled
 			if sc.enabled {
 				manager.mssClampValueIPv4 = 1240
-			manager.mssClampValueIPv6 = 1220
+				manager.mssClampValueIPv6 = 1220
 			}
 
 			srcIP := net.ParseIP("100.64.0.2")
