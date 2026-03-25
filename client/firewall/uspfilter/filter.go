@@ -313,7 +313,22 @@ func (m *Manager) blockInvalidRouted(iface common.IFaceMapper) (firewall.Rule, e
 		firewall.ActionDrop,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("block wg net: %w", err)
+		return nil, fmt.Errorf("block wg v4 net: %w", err)
+	}
+
+	if v6Net := iface.Address().IPv6Net; v6Net.IsValid() {
+		log.Debugf("blocking invalid routed traffic for %s", v6Net)
+		if _, err := m.addRouteFiltering(
+			nil,
+			sources,
+			firewall.Network{Prefix: v6Net},
+			firewall.ProtocolALL,
+			nil,
+			nil,
+			firewall.ActionDrop,
+		); err != nil {
+			return nil, fmt.Errorf("block wg v6 net: %w", err)
+		}
 	}
 
 	// TODO: Block networks that we're a client of
@@ -1336,6 +1351,7 @@ func (m *Manager) isSpecialICMP(d *decoder) bool {
 	case layers.LayerTypeICMPv6:
 		icmpType := d.icmp6.TypeCode.Type()
 		return icmpType == layers.ICMPv6TypeDestinationUnreachable ||
+			icmpType == layers.ICMPv6TypePacketTooBig ||
 			icmpType == layers.ICMPv6TypeTimeExceeded
 	}
 	return false

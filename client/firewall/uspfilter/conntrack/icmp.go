@@ -99,7 +99,7 @@ func (info ICMPInfo) isErrorMessage() bool {
 
 // parseOriginalPacket extracts info about the original packet from ICMP payload
 func (info ICMPInfo) parseOriginalPacket() string {
-	if info.PayloadLen < MaxICMPPayloadLength {
+	if info.PayloadLen == 0 {
 		return ""
 	}
 
@@ -111,6 +111,10 @@ func (info ICMPInfo) parseOriginalPacket() string {
 
 	switch version {
 	case 4:
+		// 20-byte IPv4 header + 8-byte transport minimum
+		if info.PayloadLen < 28 {
+			return ""
+		}
 		protocol = info.PayloadData[9]
 		srcIP = net.IP(info.PayloadData[12:16])
 		dstIP = net.IP(info.PayloadData[16:20])

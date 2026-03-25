@@ -1480,8 +1480,8 @@ func (e *Engine) updateOfflinePeers(offlinePeers []*mgmProto.RemotePeerConfig) {
 		log.Debugf("added offline peer %s", offlinePeer.Fqdn)
 		v4, v6 := overlayAddrsFromAllowedIPs(offlinePeer.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
 		replacement[i] = peer.State{
-			IP:               v4.String(),
-			IPv6:             v6.String(),
+			IP:               addrToString(v4),
+			IPv6:             addrToString(v6),
 			PubKey:           offlinePeer.GetWgPubKey(),
 			FQDN:             offlinePeer.GetFqdn(),
 			ConnStatus:       peer.StatusIdle,
@@ -1514,6 +1514,13 @@ func overlayAddrsFromAllowedIPs(allowedIPs []string, ourV6Net netip.Prefix) (v4,
 		}
 	}
 	return
+}
+
+func addrToString(addr netip.Addr) string {
+	if !addr.IsValid() {
+		return ""
+	}
+	return addr.String()
 }
 
 // addNewPeers adds peers that were not know before but arrived from the Management service with the update
@@ -1557,7 +1564,7 @@ func (e *Engine) addNewPeer(peerConfig *mgmProto.RemotePeerConfig) error {
 	}
 
 	peerV4, peerV6 := overlayAddrsFromAllowedIPs(peerConfig.GetAllowedIps(), e.wgInterface.Address().IPv6Net)
-	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, peerV4.String(), peerV6.String())
+	err = e.statusRecorder.AddPeer(peerKey, peerConfig.Fqdn, addrToString(peerV4), addrToString(peerV6))
 	if err != nil {
 		log.Warnf("error adding peer %s to status recorder, got error: %v", peerKey, err)
 	}

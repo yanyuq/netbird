@@ -133,11 +133,15 @@ func (p *PacketBuilder) Build() ([]byte, error) {
 }
 
 func (p *PacketBuilder) buildIPLayer() (gopacket.SerializableLayer, error) {
-	if p.SrcIP.Is6() || p.DstIP.Is6() {
+	if p.SrcIP.Is4() != p.DstIP.Is4() {
+		return nil, fmt.Errorf("mixed address families: src=%s dst=%s", p.SrcIP, p.DstIP)
+	}
+	proto := getIPProtocolNumber(p.Protocol, p.SrcIP.Is6())
+	if p.SrcIP.Is6() {
 		return &layers.IPv6{
 			Version:    6,
 			HopLimit:   64,
-			NextHeader: layers.IPProtocol(p.ipv6ProtoNumber()),
+			NextHeader: proto,
 			SrcIP:      p.SrcIP.AsSlice(),
 			DstIP:      p.DstIP.AsSlice(),
 		}, nil
@@ -145,23 +149,10 @@ func (p *PacketBuilder) buildIPLayer() (gopacket.SerializableLayer, error) {
 	return &layers.IPv4{
 		Version:  4,
 		TTL:      64,
-		Protocol: layers.IPProtocol(getIPProtocolNumber(p.Protocol)),
+		Protocol: proto,
 		SrcIP:    p.SrcIP.AsSlice(),
 		DstIP:    p.DstIP.AsSlice(),
 	}, nil
-}
-
-func (p *PacketBuilder) ipv6ProtoNumber() uint8 {
-	switch p.Protocol {
-	case "tcp":
-		return 6
-	case "udp":
-		return 17
-	case "icmp":
-		return 58
-	default:
-		return 0
-	}
 }
 
 func (p *PacketBuilder) buildTransportLayer(ipLayer gopacket.SerializableLayer) ([]gopacket.SerializableLayer, error) {
@@ -239,14 +230,17 @@ func serializePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func getIPProtocolNumber(protocol fw.Protocol) int {
+func getIPProtocolNumber(protocol fw.Protocol, isV6 bool) layers.IPProtocol {
 	switch protocol {
 	case fw.ProtocolTCP:
-		return int(layers.IPProtocolTCP)
+		return layers.IPProtocolTCP
 	case fw.ProtocolUDP:
-		return int(layers.IPProtocolUDP)
+		return layers.IPProtocolUDP
 	case fw.ProtocolICMP:
-		return int(layers.IPProtocolICMPv4)
+		if isV6 {
+			return layers.IPProtocolICMPv6
+		}
+		return layers.IPProtocolICMPv4
 	default:
 		return 0
 	}

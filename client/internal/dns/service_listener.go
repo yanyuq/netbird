@@ -219,7 +219,7 @@ func (s *serviceViaListener) tryToUseeBPF() (ebpfMgr.Manager, uint16, bool) {
 	}
 
 	ebpfSrv := ebpf.GetEbpfManagerInstance()
-	err = ebpfSrv.LoadDNSFwd(s.wgInterface.Address().IP.String(), int(port))
+	err = ebpfSrv.LoadDNSFwd(s.wgInterface.Address().IP, int(port))
 	if err != nil {
 		log.Warnf("failed to load DNS forwarder eBPF program, error: %s", err)
 		return nil, 0, false
