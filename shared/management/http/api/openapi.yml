@@ -4310,6 +4310,10 @@ components:
         - $ref: '#/components/schemas/IntegrationSyncFilters'
         - type: object
           description: Request payload for updating an SCIM IDP integration
+          properties:
+            prefix:
+              type: string
+              description: The connection prefix used for the SCIM provider
     ScimIntegration:
       allOf:
         - $ref: '#/components/schemas/IntegrationEnabled'
@@ -4319,6 +4323,7 @@ components:
           required:
             - id
             - enabled
+            - prefix
             - provider
             - group_prefixes
             - user_group_prefixes
@@ -4330,6 +4335,9 @@ components:
               format: int64
               description: The unique identifier for the integration
               example: 123
+            prefix:
+              type: string
+              description: The connection prefix used for the SCIM provider
             provider:
               type: string
               description: Name of the SCIM identity provider
@@ -4435,6 +4443,7 @@ components:
           properties:
             id:
               type: integer
+              format: int64
               description: The unique identifier for the integration
               example: 1
             customer_id:
@@ -4524,6 +4533,7 @@ components:
           properties:
             id:
               type: integer
+              format: int64
               description: The unique identifier for the integration
               example: 1
             client_id:
@@ -4581,6 +4591,7 @@ components:
           properties:
             id:
               type: integer
+              format: int64
               description: The unique identifier for the integration
               example: 1
             auth_token:

@@ -1483,7 +1483,7 @@ type AzureIntegration struct {
 	Host string `json:"host"`
 
 	// Id The unique identifier for the integration
-	Id int `json:"id"`
+	Id int64 `json:"id"`
 
 	// LastSyncedAt Timestamp of the last synchronization
 	LastSyncedAt time.Time `json:"last_synced_at"`
@@ -2064,7 +2064,7 @@ type GoogleIntegration struct {
 	GroupPrefixes []string `json:"group_prefixes"`
 
 	// Id The unique identifier for the integration
-	Id int `json:"id"`
+	Id int64 `json:"id"`
 
 	// LastSyncedAt Timestamp of the last synchronization
 	LastSyncedAt time.Time `json:"last_synced_at"`
@@ -2840,7 +2840,7 @@ type OktaScimIntegration struct {
 	GroupPrefixes []string `json:"group_prefixes"`
 
 	// Id The unique identifier for the integration
-	Id int `json:"id"`
+	Id int64 `json:"id"`
 
 	// LastSyncedAt Timestamp of the last synchronization
 	LastSyncedAt time.Time `json:"last_synced_at"`
@@ -3715,6 +3715,9 @@ type ScimIntegration struct {
 	// LastSyncedAt Timestamp of when the integration was last synced
 	LastSyncedAt time.Time `json:"last_synced_at"`
 
+	// Prefix The connection prefix used for the SCIM provider
+	Prefix string `json:"prefix"`
+
 	// Provider Name of the SCIM identity provider
 	Provider string `json:"provider"`
 
@@ -4230,6 +4233,9 @@ type UpdateScimIntegrationRequest struct {
 
 	// GroupPrefixes List of start_with string patterns for groups to sync
 	GroupPrefixes *[]string `json:"group_prefixes,omitempty"`
+
+	// Prefix The connection prefix used for the SCIM provider
+	Prefix *string `json:"prefix,omitempty"`
 
 	// UserGroupPrefixes List of start_with string patterns for groups which users to sync
 	UserGroupPrefixes *[]string `json:"user_group_prefixes,omitempty"`
