@@ -40,6 +40,7 @@ import (
 	"github.com/netbirdio/netbird/client/system"
 	mgm "github.com/netbirdio/netbird/shared/management/client"
 	mgmProto "github.com/netbirdio/netbird/shared/management/proto"
+	"github.com/netbirdio/netbird/shared/netiputil"
 	"github.com/netbirdio/netbird/shared/relay/auth/hmac"
 	relayClient "github.com/netbirdio/netbird/shared/relay/client"
 	signal "github.com/netbirdio/netbird/shared/signal/client"
@@ -529,8 +530,16 @@ func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConf
 	}
 
 	if !config.DisableIPv6 {
-		if err := wgAddr.SetIPv6FromCompact(peerConfig.GetAddressV6()); err != nil {
-			log.Warn(err)
+		if raw := peerConfig.GetAddressV6(); len(raw) > 0 {
+			prefix, err := netiputil.DecodePrefix(raw)
+			if err != nil {
+				log.Warnf("decode v6 overlay address: %v", err)
+			} else if !prefix.Addr().Is6() {
+				log.Warnf("expected IPv6 overlay address, got %s", prefix.Addr())
+			} else {
+				wgAddr.IPv6 = prefix.Addr()
+				wgAddr.IPv6Net = prefix.Masked()
+			}
 		}
 	}
 
