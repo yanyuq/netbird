@@ -263,7 +263,9 @@ func (s *Service) ToAPIResponse() *api.Service {
 		if opts == nil {
 			opts = &api.ServiceTargetOptions{}
 		}
-		opts.ProxyProtocol = &target.ProxyProtocol
+		if target.ProxyProtocol {
+			opts.ProxyProtocol = &target.ProxyProtocol
+		}
 		st.Options = opts
 		apiTargets = append(apiTargets, st)
 	}
@@ -947,7 +949,6 @@ func containsCRLF(s string) bool {
 }
 
 func validateHeaderAuths(headers []*HeaderAuthConfig) error {
-	seen := make(map[string]struct{})
 	for i, h := range headers {
 		if h == nil || !h.Enabled {
 			continue
@@ -968,10 +969,6 @@ func validateHeaderAuths(headers []*HeaderAuthConfig) error {
 		if canonical == "Host" {
 			return fmt.Errorf("header_auths[%d]: Host header cannot be used for auth", i)
 		}
-		if _, dup := seen[canonical]; dup {
-			return fmt.Errorf("header_auths[%d]: duplicate header %q (same canonical form already configured)", i, h.Header)
-		}
-		seen[canonical] = struct{}{}
 		if len(h.Value) > maxHeaderValueLen {
 			return fmt.Errorf("header_auths[%d]: value exceeds maximum length of %d", i, maxHeaderValueLen)
 		}
